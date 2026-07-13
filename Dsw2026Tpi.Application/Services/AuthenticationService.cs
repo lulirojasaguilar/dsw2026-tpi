@@ -33,19 +33,43 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task<LoginAdminModel.Response> LoginAdmin(LoginAdminModel.Request request)
     {
-        if (!request.Email.IsEmailValid()) throw new AuthenticationException();
-        var user = await _userManager.FindByEmailAsync(request.Email) ?? throw new AuthenticationException();
+        if (!request.Email.IsEmailValid())
+        {
+            _logger.LogInformation(
+                "Intento de login de administrador fallido: email inválido");
+
+            throw new AuthenticationException();
+        }
+
+        var user = await _userManager.FindByEmailAsync(request.Email);
+
+        if (user is null)
+        {
+            _logger.LogInformation(
+                "Intento de login de administrador fallido para: {Email}. Usuario inexistente",
+                request.Email);
+
+            throw new AuthenticationException();
+        }
+
         var result = await _signInManager.CheckPassword(user, request.Password);
 
         if (!result)
         {
-            _logger.LogError("Intento de login fallido para: {Email}", request.Email);
+            _logger.LogInformation(
+                "Intento de login de administrador fallido para: {Email}. Contraseña incorrecta",
+                request.Email);
+
             throw new AuthenticationException();
         }
 
         var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault();
 
-        var token  = _jwtService.GenerateToken(user.UserName!, role);
+        var token = _jwtService.GenerateToken(user.UserName!, role);
+
+        _logger.LogInformation(
+            "Login de administrador exitoso para: {Email}",
+            request.Email);
 
         return new LoginAdminModel.Response(
             token,
