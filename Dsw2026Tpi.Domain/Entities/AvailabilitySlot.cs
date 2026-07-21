@@ -16,7 +16,7 @@ namespace Dsw2026Tpi.Domain.Entities
 
         public AvailabilitySlot() { }
 
-        public AvailabilitySlot(Guid availabilityRuleId, DateOnly slotDate, TimeSpan startTime, TimeSpan endTime, string status, bool deleted)
+        public AvailabilitySlot(Guid availabilityRuleId, DateOnly slotDate, TimeSpan startTime, TimeSpan endTime, string status)
         {
             AvailabilityRuleId = availabilityRuleId;
             SlotDate = slotDate;

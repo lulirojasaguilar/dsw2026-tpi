@@ -18,7 +18,7 @@ namespace Dsw2026Tpi.Domain.Entities
 
         protected AvailabilityRule() { }
 
-        public AvailabilityRule(Guid doctorId, int month, int year, int dayOfWeek, TimeSpan startTime, TimeSpan endTime, bool deleted)
+        public AvailabilityRule(Guid doctorId, int month, int year, int dayOfWeek, TimeSpan startTime, TimeSpan endTime)
         {
             DoctorId = doctorId;
             Month = month;

@@ -1,0 +1,49 @@
+﻿using Dsw2026Tpi.Application.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Dsw2026Tpi.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AvailabilityController : ControllerBase 
+{ 
+    private readonly IAvailabilityService _availabilityService;
+
+    public AvailabilityController (IAvailabilityService availabilityService)
+    {  
+        _availabilityService = availabilityService; 
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateAvailabilityRule([FromBody] CreateAvailabilityRequest request)
+    {
+        try
+        {
+            var startTime = TimeSpan.Parse(request.StartTime);
+            var endTime = TimeSpan.Parse(request.EndTime);
+
+            var rule = await _availabilityService.CreateAvailabilityRuleAsync(request.DoctorId,
+                request.Month,
+                request.Year,
+                request.DayOfWeek,
+                startTime,
+                endTime);
+            return Ok(new { Message = "Disponibilidad generada con exito", RuleId = rule.Id });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Error = ex.Message });
+        }
+    }
+}
+
+public record CreateAvailabilityRequest(
+    Guid DoctorId,
+    int Month,
+    int Year,
+    int DayOfWeek,
+    string StartTime,
+    string EndTime
+
+
+    );
