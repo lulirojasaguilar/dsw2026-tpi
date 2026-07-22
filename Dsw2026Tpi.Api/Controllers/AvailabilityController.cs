@@ -1,10 +1,13 @@
 ﻿using Dsw2026Tpi.Application.Services;
+using Dsw2026Tpi.CrossCutting.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dsw2026Tpi.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/availabilities")]
+[Authorize(Policy = Policies.AdminPolicy)]
 public class AvailabilityController : ControllerBase 
 { 
     private readonly IAvailabilityService _availabilityService;
@@ -22,13 +25,19 @@ public class AvailabilityController : ControllerBase
             var startTime = TimeSpan.Parse(request.StartTime);
             var endTime = TimeSpan.Parse(request.EndTime);
 
-            var rule = await _availabilityService.CreateAvailabilityRuleAsync(request.DoctorId,
+            var rule = await _availabilityService.CreateAvailabilityRuleAsync(
+                request.DoctorId,
                 request.Month,
                 request.Year,
                 request.DayOfWeek,
                 startTime,
                 endTime);
+
             return Ok(new { Message = "Disponibilidad generada con exito", RuleId = rule.Id });
+        }
+        catch(InvalidOperationException ex) when (ex.Message.StartsWith("SCHEDULE_OVERLAP")) 
+        { 
+            return Conflict(new {Error = ex.Message });
         }
         catch (Exception ex)
         {

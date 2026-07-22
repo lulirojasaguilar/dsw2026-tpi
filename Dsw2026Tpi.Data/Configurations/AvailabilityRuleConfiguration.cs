@@ -22,6 +22,8 @@ namespace Dsw2026Tpi.Data.Configurations
             builder.Property(x => x.StartTime).IsRequired();
             builder.Property(x => x.EndTime).IsRequired();
             builder.Property(x => x.Deleted).IsRequired();
+            builder.HasIndex(r => new {r.DoctorId, r.Year, r.Month, r.DayOfWeek, r.StartTime, r.EndTime})
+                .IsUnique();
         }
     }
 }

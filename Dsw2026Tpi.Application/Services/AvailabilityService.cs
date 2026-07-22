@@ -1,5 +1,7 @@
-﻿using Dsw2026Tpi.Data;
+﻿using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.Data;
 using Dsw2026Tpi.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -29,6 +31,17 @@ namespace Dsw2026Tpi.Application.Services
         {
             _logger.LogInformation("Iniciando generación de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}", doctorId, month, year);
 
+            if (startTime >= endTime)
+            {
+                throw new ValidationException("VALIDATION_ERROR", "StartTime debe ser estrictamente menor a EndTime.");
+            }
+
+            var doctorExists = await _context.Set<Doctor>().AnyAsync(d => d.Id == doctorId && d.IsActive);
+            if (!doctorExists)
+            {
+                throw new EntityNotFoundException("Doctor");
+            }
+
             var existingRules = _context.Set<AvailabilityRule>()
                 .Where(r => r.DoctorId == doctorId
                 && r.Month == month
@@ -42,7 +55,7 @@ namespace Dsw2026Tpi.Application.Services
                 if (startTime < existing.EndTime && existing.StartTime < endTime)
                 {
                     _logger.LogWarning("Conflicto de solapamiento detectado para el doctor {DoctorId} en el dia de la semana{DayOfWeek}", doctorId, dayofWeek);
-                    throw new InvalidOperationException("SCHEDULE_OVERLAP: Ya existe una regla de disponibilidad que se solapa con el rango horario indicado para este dia");
+                    throw new BusinessRuleException("SCHEDULE_OVERLAP"," Ya existe una regla de disponibilidad que se solapa con el rango horario indicado para este dia");
 
                 }
             }

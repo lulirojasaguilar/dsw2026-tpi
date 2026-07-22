@@ -31,6 +31,10 @@ namespace Dsw2026Tpi.Data.Configurations
                 .WithMany()
                 .HasForeignKey(x =>  x.AvailabilityRuleId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+
+            builder.HasIndex(s => new { s.AvailabilityRuleId, s.SlotDate, s.StartTime })
+                .IsUnique();
         }
 
     }
