@@ -29,15 +29,33 @@ namespace Dsw2026Tpi.Application.Services
         {
             _logger.LogInformation("Iniciando generación de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}", doctorId, month, year);
 
-            var rule = new AvailabilityRule(doctorId, month, year, dayofWeek, startTime, endTime);
+            var existingRules = _context.Set<AvailabilityRule>()
+                .Where(r => r.DoctorId == doctorId
+                && r.Month == month
+                && r.Year == year
+                && r.DayOfWeek == dayofWeek
+                && !r.Deleted
+                );
 
-            _context.Set<AvailabilityRule>().Add(rule);
-            var slots = GenerateSlotsForMonth(rule.Id, month, year, dayofWeek, startTime, endTime);
-            await _context.Set<AvailabilitySlot>().AddRangeAsync(slots);
-            await _context.SaveChangesAsync();
+            foreach (var existing in existingRules)
+            {
+                if (startTime < existing.EndTime && existing.StartTime < endTime)
+                {
+                    _logger.LogWarning("Conflicto de solapamiento detectado para el doctor {DoctorId} en el dia de la semana{DayOfWeek}", doctorId, dayofWeek);
+                    throw new InvalidOperationException("SCHEDULE_OVERLAP: Ya existe una regla de disponibilidad que se solapa con el rango horario indicado para este dia");
 
-            _logger.LogInformation("Se generaron exitosamente los slots de disponibilidades para la regla {RuleID}", rule.Id);
-            return rule;
+                }
+            }
+                var rule = new AvailabilityRule(doctorId, month, year, dayofWeek, startTime, endTime);
+
+                _context.Set<AvailabilityRule>().Add(rule);
+                var slots = GenerateSlotsForMonth(rule.Id, month, year, dayofWeek, startTime, endTime);
+                await _context.Set<AvailabilitySlot>().AddRangeAsync(slots);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Se generaron exitosamente los slots de disponibilidades para la regla {RuleID}", rule.Id);
+                return rule;
+            
         }
 
         private List<AvailabilitySlot> GenerateSlotsForMonth(Guid ruleId, int month, int year, int targetDayOfWeek, TimeSpan startTime, TimeSpan endTime)
@@ -46,29 +64,52 @@ namespace Dsw2026Tpi.Application.Services
 
             int daysInMonth = DateTime.DaysInMonth(year, month);
 
-            for (int day = 1; day <= daysInMonth; day++) {
+            var holidays = GetHolidaysForYear(year);
+
+            for (int day = 1; day <= daysInMonth; day++)
+            {
                 var currentDate = new DateOnly(year, month, day);
 
-                if ((int)currentDate.DayOfWeek == targetDayOfWeek) {
-                    if ((IsHolidays(currentDate))){
-                        _logger.LogWarning("La fecha {Date} es feriado. No se generaran turnos", currentDate);
-                        continue;
-                    }
-                    var currentSlotStart = startTime;
-                    while (currentSlotStart.Add(TimeSpan.FromMinutes(30)) <= endTime)
-                    {
-                        var currentSlotEnd = currentSlotStart.Add(TimeSpan.FromMinutes(30));
-                        var slot = new AvailabilitySlot(ruleId, currentDate, currentSlotStart, currentSlotEnd, status: "AVAILABLE");
-                        slots.Add(slot);
-                        currentSlotStart = currentSlotEnd;
-                    }
+                if ((int)currentDate.DayOfWeek != targetDayOfWeek)
+                {
+                    continue;
+                }
+
+                if (holidays.Contains(currentDate))
+                {
+                    _logger.LogWarning("La fecha {Date} es un dia no laborable/feriado. Se omite la generacion de turnos.", currentDate);
+                    continue;
+                }
+                var currentSlotStart = startTime;
+                while (currentSlotStart.Add(TimeSpan.FromMinutes(30)) <= endTime)
+                {
+                    var currentSlotEnd = currentSlotStart.Add(TimeSpan.FromMinutes(30));
+
+                    var slot = new AvailabilitySlot(
+                        ruleId,
+                        currentDate,
+                        currentSlotStart,
+                        currentSlotEnd,
+                        status: "AVAILABLE"
+                        );
+                    slots.Add(slot);
+                    currentSlotStart = currentSlotEnd;
                 }
             }
             return slots;
         }
-        private bool IsHolidays(DateOnly date)
+
+
+
+
+        private HashSet<DateOnly> GetHolidaysForYear(int year)
         {
-            return false;
+            return new HashSet<DateOnly>
+            {
+                new DateOnly(year, 7, 9),
+                new DateOnly(year, 12, 25),
+            };
         }
+
     }
-    }
+}
