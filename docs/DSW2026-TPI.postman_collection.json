@@ -1,0 +1,165 @@
+{
+  "info": {
+    "_postman_id": "279ec68a-7290-4ad8-a474-f97a92116f96",
+    "name": "DSW2026-TPI",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "56830486"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Admin Login OK",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"admin@dsw2026.com\",\r\n  \"password\": \"Admin123!\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://localhost:7075/auth/admin/login",
+              "protocol": "https",
+              "host": [
+                "localhost"
+              ],
+              "port": "7075",
+              "path": [
+                "auth",
+                "admin",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin Register (TEMP)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"admin2@dsw.com\",\r\n  \"password\": \"Admin123!\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://localhost:7075/auth/admin/register",
+              "protocol": "https",
+              "host": [
+                "localhost"
+              ],
+              "port": "7075",
+              "path": [
+                "auth",
+                "admin",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin Login - Credenciales inválidas",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"admin@dsw.com\",\r\n  \"password\": \"123456\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://localhost:7075/auth/admin/login",
+              "protocol": "https",
+              "host": [
+                "localhost"
+              ],
+              "port": "7075",
+              "path": [
+                "auth",
+                "admin",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Patient Login - Paciente nuevo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"nuevo@gmail.com\",\r\n  \"dni\": 40111222\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://localhost:7075/auth/patient/login",
+              "protocol": "https",
+              "host": [
+                "localhost"
+              ],
+              "port": "7075",
+              "path": [
+                "auth",
+                "patient",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Patient Login - Paciente existente",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"nuevo@gmail.com\",\r\n  \"dni\": 40111222\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://localhost:7075/auth/patient/login",
+              "protocol": "https",
+              "host": [
+                "localhost"
+              ],
+              "port": "7075",
+              "path": [
+                "auth",
+                "patient",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
