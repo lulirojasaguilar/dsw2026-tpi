@@ -34,6 +34,10 @@ public class Program
 
             var app = builder.Build();
 
+            await AdminInitializer.InitializeAdminAsync(
+                    app.Services,
+                    app.Configuration);
+
             app.UseSerilogRequestLogging();
 
             if (app.Environment.IsProduction())
