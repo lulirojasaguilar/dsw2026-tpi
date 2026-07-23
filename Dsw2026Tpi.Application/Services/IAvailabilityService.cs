@@ -15,5 +15,13 @@ namespace Dsw2026Tpi.Application.Services
             TimeSpan startTime,
             TimeSpan endTime);
 
+
+        Task<AvailabilityRule> UpdateAvailabilityRuleAsync(
+            Guid doctorId,
+            int month,
+            int year,
+            int dayOfWeek,
+            TimeSpan startTime,
+            TimeSpan endTime);
     }
 }

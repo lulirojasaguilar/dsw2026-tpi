@@ -42,7 +42,7 @@ namespace Dsw2026Tpi.Application.Services
                 throw new EntityNotFoundException("Doctor");
             }
 
-            var existingRules = _context.Set<AvailabilityRule>()
+            var existingRule = _context.Set<AvailabilityRule>()
                 .Where(r => r.DoctorId == doctorId
                 && r.Month == month
                 && r.Year == year
@@ -50,7 +50,7 @@ namespace Dsw2026Tpi.Application.Services
                 && !r.Deleted
                 );
 
-            foreach (var existing in existingRules)
+            foreach (var existing in existingRule)
             {
                 if (startTime < existing.EndTime && existing.StartTime < endTime)
                 {
@@ -70,6 +70,76 @@ namespace Dsw2026Tpi.Application.Services
                 return rule;
             
         }
+
+
+        public async Task<AvailabilityRule> UpdateAvailabilityRuleAsync(
+                   Guid doctorId,
+                   int month,
+                   int year,
+                   int dayOfWeek,
+                   TimeSpan startTime,
+                   TimeSpan endTime)
+        {
+            _logger.LogInformation("Iniciando actualización de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}, dia {DayOfWeek}", doctorId, month, year, dayOfWeek);
+
+            if (startTime >= endTime)
+            {
+                throw new ValidationException("VALIDATION_ERROR", "StartTime debe ser estrictamente menor a EndTime.");
+            }
+
+            var doctorExists = await _context.Set<Doctor>().AnyAsync(d => d.Id == doctorId && d.IsActive);
+            if (!doctorExists)
+            {
+                throw new EntityNotFoundException("Doctor");
+            }
+
+           
+            var existingRule = await _context.Set<AvailabilityRule>()
+                .FirstOrDefaultAsync(r => r.DoctorId == doctorId
+                                       && r.Month == month
+                                       && r.Year == year
+                                       && r.DayOfWeek == dayOfWeek
+                                       && !r.Deleted);
+
+            if (existingRule == null)
+            {
+                throw new EntityNotFoundException("AvailabilityRule");
+            }
+
+        
+            var existingSlots = await _context.Set<AvailabilitySlot>()
+                .Where(s => s.AvailabilityRuleId == existingRule.Id && !s.Deleted)
+                .ToListAsync();
+
+          
+            if (existingSlots.Any(s => s.Status == "BOOKED"))
+            {
+                _logger.LogWarning("Intento de sobrescritura fallido: El doctor {DoctorId} ya tiene turnos reservados para este dia.", doctorId);
+                throw new BusinessRuleException("UPDATE_CONFLICT", "No se puede sobrescribir el mes porque ya existen turnos reservados (BOOKED) para este día.");
+            }
+
+           
+            existingRule.Delete();
+            foreach (var slot in existingSlots)
+            {
+                slot.Delete();
+            }
+
+          
+            var newRule = new AvailabilityRule(doctorId, month, year, dayOfWeek, startTime, endTime);
+            _context.Set<AvailabilityRule>().Add(newRule);
+
+            var newSlots = GenerateSlotsForMonth(newRule.Id, month, year, dayOfWeek, startTime, endTime);
+            await _context.Set<AvailabilitySlot>().AddRangeAsync(newSlots);
+
+           
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Se sobrescribió exitosamente la disponibilidad para la nueva regla {RuleID}", newRule.Id);
+            return newRule;
+        }
+
+
 
         private List<AvailabilitySlot> GenerateSlotsForMonth(Guid ruleId, int month, int year, int targetDayOfWeek, TimeSpan startTime, TimeSpan endTime)
         {
