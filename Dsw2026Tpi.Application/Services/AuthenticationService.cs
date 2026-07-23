@@ -38,12 +38,32 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task<LoginAdminModel.Response> LoginAdmin(LoginAdminModel.Request request)
     {
+        var validationErrors = new List<(string Field, string Issue)>();
+
         if (!request.Email.IsEmailValid())
         {
-            _logger.LogInformation(
-                "Intento de login de administrador fallido: email inválido");
+            validationErrors.Add((
+                "email",
+                "El email es obligatorio y debe tener un formato válido."
+            ));
+        }
 
-            throw new AuthenticationException();
+        if (string.IsNullOrWhiteSpace(request.Password) ||
+            request.Password.Length < 8)
+        {
+            validationErrors.Add((
+                "password",
+                "La contraseña es obligatoria y debe contener al menos 8 caracteres."
+            ));
+        }
+
+        if (validationErrors.Count > 0)
+        {
+            _logger.LogInformation(
+                "Intento de login de administrador fallido por datos inválidos");
+
+            throw new ValidationException()
+                .WithDetail(validationErrors);
         }
 
         var user = await _userManager.FindByEmailAsync(request.Email);
@@ -68,7 +88,7 @@ public class AuthenticationService : IAuthenticationService
             throw new AuthenticationException();
         }
 
-        var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault();
+        var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault() ?? Roles.Administrator;
 
         var token = _jwtService.GenerateToken(user.UserName!, role);
 
@@ -78,7 +98,7 @@ public class AuthenticationService : IAuthenticationService
 
         return new LoginAdminModel.Response(
             token,
-            role
+            role.ToUpperInvariant()
         );
     }
 
@@ -238,7 +258,7 @@ public class AuthenticationService : IAuthenticationService
 
         return new LoginPatientModel.Response(
             token,
-            role
+            role.ToUpperInvariant()
         );
     }
 
