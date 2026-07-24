@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Dsw2026Tpi.Api.Controllers;
 
-[Route("auth")]
+[Route("api/auth")]
 public class AuthenticationController : AppController
 {
     private readonly IAuthenticationService _authenticationService;
@@ -13,7 +13,7 @@ public class AuthenticationController : AppController
     {
         _authenticationService = authenticationService;
     }
-
+    // Tener cuidado eliminarlo antes de entregar porque no se pide en el TPI, solo sire para probar
     [HttpPost("admin/register")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -29,6 +29,18 @@ public class AuthenticationController : AppController
     public async Task<IActionResult> Login([FromBody] LoginAdminModel.Request request)
     {
         var result = await _authenticationService.LoginAdmin(request);
+        return Ok(result);
+    }
+
+    [HttpPost("patient/login")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> LoginPatient(
+    [FromBody] LoginPatientModel.Request request)
+    {
+        var result = await _authenticationService.LoginPatient(request);
+
         return Ok(result);
     }
 }

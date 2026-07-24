@@ -10,9 +10,15 @@ public class DoctorConfiguration : IEntityTypeConfiguration<Doctor>
     {
         builder.ToTable("Doctors");
         builder.HasKey(x => x.Id);
+
         builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
         builder.Property(x => x.LicenseNumber).IsRequired();
-        builder.Property(x => x.Deleted).IsRequired();
+
+        builder.Property(x => x.Deleted)
+            .HasColumnName("deleted")
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.HasOne(x => x.Speciality)
             .WithMany()
             .HasForeignKey(x => x.SpecialityId)
