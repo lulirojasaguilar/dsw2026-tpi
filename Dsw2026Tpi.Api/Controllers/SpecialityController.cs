@@ -1,6 +1,8 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,7 +22,11 @@ namespace Dsw2026Tpi.Api.Controllers;
        [ProducesResponseType(StatusCodes.Status200OK)]
        public async Task<IActionResult> GetAll([FromQuery] int pageSize, [FromQuery] int pageIndex, [FromQuery] string? name = null)
        {
-           var specialities = await _service.GetAll(pageSize, pageIndex, name);
+        if (!string.IsNullOrWhiteSpace(name) && (name.Length < 3 || name.Length > 100))
+        {
+            throw new ValidationException("El nombre debe tener entre 3 y 100 caracteres.", ErrorCodes.VALIDATION_ERROR).WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
+        }
+        var specialities = await _service.GetAll(pageSize, pageIndex, name);
            return Ok(specialities);
        }
 

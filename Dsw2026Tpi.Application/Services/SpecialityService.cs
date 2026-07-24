@@ -27,7 +27,7 @@ namespace Dsw2026Tpi.Application.Services
 
             var existingSpecialities = await _persistence.GetFiltered<Speciality>(s => s.Name == request.Name && !s.Deleted);
 
-            if (existingSpecialities?.Any() == null)
+            if (existingSpecialities?.Any() == true)
             {
                 throw new ConflictException(ErrorCodes.VALIDATION_ERROR,"Ya existe una especialidad con ese nombre.");
             }
