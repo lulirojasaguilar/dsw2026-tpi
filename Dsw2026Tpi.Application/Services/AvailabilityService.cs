@@ -1,198 +1,295 @@
-﻿using Dsw2026Tpi.CrossCutting.Exceptions;
-using Dsw2026Tpi.Data;
+﻿using Dsw2026Tpi.Application.Dtos;
+using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.Domain.Constants;
 using Dsw2026Tpi.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
+using Dsw2026Tpi.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Reflection.Metadata.Ecma335;
-using System.Text;
 
 namespace Dsw2026Tpi.Application.Services
 {
+   
     public class AvailabilityService : IAvailabilityService
     {
-        private readonly Dsw2026TpiDbContext _context;
+        private readonly IPersistence _persistence;
         private readonly ILogger<AvailabilityService> _logger;
+        private readonly AvailabilityGenerator _generator;
 
-        public AvailabilityService(Dsw2026TpiDbContext context, ILogger<AvailabilityService> logger)
+        public AvailabilityService(IPersistence persistence, ILogger<AvailabilityService> logger)
         {
-            _context = context;
+            _persistence = persistence;
             _logger = logger;
+            _generator = new AvailabilityGenerator();
         }
 
-        public async Task<AvailabilityRule> CreateAvailabilityRuleAsync(
-            Guid doctorId,
-            int month,
-            int year,
-            int dayofWeek,
-            TimeSpan startTime,
-            TimeSpan endTime)
+        public async Task<AvailabilityModel.Response> CreateAvailabilityAsync(AvailabilityModel.Request request)
         {
-            _logger.LogInformation("Iniciando generación de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}", doctorId, month, year);
+            _logger.LogInformation(
+                "Iniciando generación de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}",
+                request.DoctorId, request.Month, request.Year);
 
-            if (startTime >= endTime)
-            {
-                throw new ValidationException("VALIDATION_ERROR", "StartTime debe ser estrictamente menor a EndTime.");
-            }
+            var parsedDays = await ValidateAndParseRequestAsync(request, isUpdate: false);
 
-            var doctorExists = await _context.Set<Doctor>().AnyAsync(d => d.Id == doctorId && d.IsActive);
-            if (!doctorExists)
-            {
-                throw new EntityNotFoundException("Doctor");
-            }
+            var doctor = await GetActiveDoctorOrThrowAsync(request.DoctorId);
 
-            var existingRule = _context.Set<AvailabilityRule>()
-                .Where(r => r.DoctorId == doctorId
-                && r.Month == month
-                && r.Year == year
-                && r.DayOfWeek == dayofWeek
-                && !r.Deleted
-                );
-
-            foreach (var existing in existingRule)
-            {
-                if (startTime < existing.EndTime && existing.StartTime < endTime)
-                {
-                    _logger.LogWarning("Conflicto de solapamiento detectado para el doctor {DoctorId} en el dia de la semana{DayOfWeek}", doctorId, dayofWeek);
-                    throw new BusinessRuleException("SCHEDULE_OVERLAP"," Ya existe una regla de disponibilidad que se solapa con el rango horario indicado para este dia");
-
-                }
-            }
-                var rule = new AvailabilityRule(doctorId, month, year, dayofWeek, startTime, endTime);
-
-                _context.Set<AvailabilityRule>().Add(rule);
-                var slots = GenerateSlotsForMonth(rule.Id, month, year, dayofWeek, startTime, endTime);
-                await _context.Set<AvailabilitySlot>().AddRangeAsync(slots);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Se generaron exitosamente los slots de disponibilidades para la regla {RuleID}", rule.Id);
-                return rule;
             
-        }
+            var createdRules = new List<AvailabilityRule>();
+            var allSlots = new List<AvailabilitySlot>();
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var nowTimeOfDay = DateTime.Now.TimeOfDay;
 
-
-        public async Task<AvailabilityRule> UpdateAvailabilityRuleAsync(
-                   Guid doctorId,
-                   int month,
-                   int year,
-                   int dayOfWeek,
-                   TimeSpan startTime,
-                   TimeSpan endTime)
-        {
-            _logger.LogInformation("Iniciando actualización de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}, dia {DayOfWeek}", doctorId, month, year, dayOfWeek);
-
-            if (startTime >= endTime)
+            foreach (var day in parsedDays)
             {
-                throw new ValidationException("VALIDATION_ERROR", "StartTime debe ser estrictamente menor a EndTime.");
-            }
+                var rule = new AvailabilityRule(
+                    request.DoctorId, request.Month, request.Year, day.DayIndex, day.StartTime, day.EndTime);
 
-            var doctorExists = await _context.Set<Doctor>().AnyAsync(d => d.Id == doctorId && d.IsActive);
-            if (!doctorExists)
-            {
-                throw new EntityNotFoundException("Doctor");
+                createdRules.Add(rule);
+
+                var slots = _generator.GenerateSlotsForMonth(
+                    rule.Id, request.DoctorId, request.Month, request.Year, day.DayIndex, day.StartTime, day.EndTime,
+                    today, nowTimeOfDay);
+
+                allSlots.AddRange(slots);
             }
 
            
-            var existingRule = await _context.Set<AvailabilityRule>()
-                .FirstOrDefaultAsync(r => r.DoctorId == doctorId
-                                       && r.Month == month
-                                       && r.Year == year
-                                       && r.DayOfWeek == dayOfWeek
-                                       && !r.Deleted);
+            foreach (var rule in createdRules)
+            {
+                await _persistence.Add(rule);
+            }
+            foreach (var slot in allSlots)
+            {
+                await _persistence.Add(slot);
+            }
 
-            if (existingRule == null)
+            _logger.LogInformation(
+                "Se generaron {RuleCount} reglas y {SlotCount} slots para el doctor {DoctorId}",
+                createdRules.Count, allSlots.Count, request.DoctorId);
+
+            return BuildResponse(request, createdRules, allSlots);
+        }
+
+        public async Task<AvailabilityModel.Response> UpdateAvailabilityAsync(AvailabilityModel.Request request)
+        {
+            _logger.LogInformation(
+                "Iniciando sobrescritura de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}",
+                request.DoctorId, request.Month, request.Year);
+
+            
+            var parsedDays = await ValidateAndParseRequestAsync(request, isUpdate: true);
+            await GetActiveDoctorOrThrowAsync(request.DoctorId);
+
+            
+            var existingRules = (await _persistence.GetFiltered<AvailabilityRule>(r =>
+                    r.DoctorId == request.DoctorId
+                    && r.Month == request.Month
+                    && r.Year == request.Year
+                    && !r.Deleted) ?? Enumerable.Empty<AvailabilityRule>())
+                .ToList();
+
+         
+            if (existingRules.Count == 0)
             {
                 throw new EntityNotFoundException("AvailabilityRule");
             }
 
-        
-            var existingSlots = await _context.Set<AvailabilitySlot>()
-                .Where(s => s.AvailabilityRuleId == existingRule.Id && !s.Deleted)
-                .ToListAsync();
+            var ruleIds = existingRules.Select(r => r.Id).ToList();
 
-          
-            if (existingSlots.Any(s => s.Status == "BOOKED"))
-            {
-                _logger.LogWarning("Intento de sobrescritura fallido: El doctor {DoctorId} ya tiene turnos reservados para este dia.", doctorId);
-                throw new BusinessRuleException("UPDATE_CONFLICT", "No se puede sobrescribir el mes porque ya existen turnos reservados (BOOKED) para este día.");
-            }
+            var existingSlots = (await _persistence.GetFiltered<AvailabilitySlot>(s =>
+                    ruleIds.Contains(s.AvailabilityRuleId) && !s.Deleted) ?? Enumerable.Empty<AvailabilitySlot>())
+                .ToList();
 
            
-            existingRule.Delete();
+            var hasProtectedSlots = existingSlots.Any(s =>
+                s.Status == AvailabilityStatuses.Booked || s.Status == AvailabilityStatuses.Blocked);
+
+            if (hasProtectedSlots)
+            {
+                _logger.LogWarning(
+                    "Intento de sobrescritura fallido: el doctor {DoctorId} tiene turnos reservados o bloqueados en {Month}/{Year}",
+                    request.DoctorId, request.Month, request.Year);
+
+                throw new BusinessRuleException(
+                    "UPDATE_CONFLICT",
+                    "No se puede sobrescribir el mes porque existen turnos reservados (BOOKED) o bloqueados (BLOCKED) para este período.");
+            }
+
+            
+            foreach (var rule in existingRules)
+            {
+                rule.Delete();
+                await _persistence.Update(rule);
+            }
             foreach (var slot in existingSlots)
             {
                 slot.Delete();
+                await _persistence.Update(slot);
             }
 
-          
-            var newRule = new AvailabilityRule(doctorId, month, year, dayOfWeek, startTime, endTime);
-            _context.Set<AvailabilityRule>().Add(newRule);
+            var createdRules = new List<AvailabilityRule>();
+            var allSlots = new List<AvailabilitySlot>();
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var nowTimeOfDay = DateTime.Now.TimeOfDay;
 
-            var newSlots = GenerateSlotsForMonth(newRule.Id, month, year, dayOfWeek, startTime, endTime);
-            await _context.Set<AvailabilitySlot>().AddRangeAsync(newSlots);
+            foreach (var day in parsedDays)
+            {
+                var newRule = new AvailabilityRule(
+                    request.DoctorId, request.Month, request.Year, day.DayIndex, day.StartTime, day.EndTime);
+
+                createdRules.Add(newRule);
+
+                var slots = _generator.GenerateSlotsForMonth(
+                    newRule.Id, request.DoctorId, request.Month, request.Year, day.DayIndex, day.StartTime, day.EndTime,
+                    today, nowTimeOfDay);
+
+                allSlots.AddRange(slots);
+            }
+
+            foreach (var rule in createdRules)
+            {
+                await _persistence.Add(rule);
+            }
+            foreach (var slot in allSlots)
+            {
+                await _persistence.Add(slot);
+            }
+
+            _logger.LogInformation(
+                "Se sobrescribió la disponibilidad del doctor {DoctorId} para {Month}/{Year}: {RuleCount} reglas, {SlotCount} slots nuevos",
+                request.DoctorId, request.Month, request.Year, createdRules.Count, allSlots.Count);
+
+            return BuildResponse(request, createdRules, allSlots);
+        }
+
+      
+
+        private record ParsedDay(int DayIndex, string DayName, TimeSpan StartTime, TimeSpan EndTime);
+
+        private async Task<List<ParsedDay>> ValidateAndParseRequestAsync(AvailabilityModel.Request request, bool isUpdate)
+        {
+           
+            if (request.DoctorId == Guid.Empty)
+            {
+                throw new ValidationException("VALIDATION_ERROR", "DoctorId es obligatorio.");
+            }
+
+            
+            if (request.Days is null || request.Days.Count == 0)
+            {
+                throw new ValidationException("VALIDATION_ERROR", "Debe indicar al menos un día de atención.");
+            }
 
            
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Se sobrescribió exitosamente la disponibilidad para la nueva regla {RuleID}", newRule.Id);
-            return newRule;
-        }
-
-
-
-        private List<AvailabilitySlot> GenerateSlotsForMonth(Guid ruleId, int month, int year, int targetDayOfWeek, TimeSpan startTime, TimeSpan endTime)
-        {
-            var slots = new List<AvailabilitySlot>();
-
-            int daysInMonth = DateTime.DaysInMonth(year, month);
-
-            var holidays = GetHolidaysForYear(year);
-
-            for (int day = 1; day <= daysInMonth; day++)
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var lastDayOfRequestedMonth = new DateOnly(request.Year, request.Month, DateTime.DaysInMonth(request.Year, request.Month));
+            if (lastDayOfRequestedMonth < today)
             {
-                var currentDate = new DateOnly(year, month, day);
+                throw new ValidationException("VALIDATION_ERROR", "No se puede configurar disponibilidad para un mes completamente pasado.");
+            }
 
-                if ((int)currentDate.DayOfWeek != targetDayOfWeek)
+            var parsed = new List<ParsedDay>();
+
+            foreach (var day in request.Days)
+            {
+              
+                if (string.IsNullOrWhiteSpace(day.Day))
                 {
-                    continue;
+                    throw new ValidationException("VALIDATION_ERROR", "El campo 'day' es obligatorio en cada elemento de 'days'.");
+                }
+                if (string.IsNullOrWhiteSpace(day.StartTime) || string.IsNullOrWhiteSpace(day.EndTime))
+                {
+                    throw new ValidationException("VALIDATION_ERROR", "Los campos 'startTime' y 'endTime' son obligatorios en cada elemento de 'days'.");
                 }
 
-                if (holidays.Contains(currentDate))
-                {
-                    _logger.LogWarning("La fecha {Date} es un dia no laborable/feriado. Se omite la generacion de turnos.", currentDate);
-                    continue;
-                }
-                var currentSlotStart = startTime;
-                while (currentSlotStart.Add(TimeSpan.FromMinutes(30)) <= endTime)
-                {
-                    var currentSlotEnd = currentSlotStart.Add(TimeSpan.FromMinutes(30));
+                var dayIndex = AvailabilityGenerator.ParseDay(day.Day); 
+                var startTime = AvailabilityGenerator.ParseTime(day.StartTime, "startTime"); 
+                var endTime = AvailabilityGenerator.ParseTime(day.EndTime, "endTime"); 
 
-                    var slot = new AvailabilitySlot(
-                        ruleId,
-                        currentDate,
-                        currentSlotStart,
-                        currentSlotEnd,
-                        status: "AVAILABLE"
-                        );
-                    slots.Add(slot);
-                    currentSlotStart = currentSlotEnd;
+                AvailabilityGenerator.ValidateRange(startTime, endTime); 
+
+                parsed.Add(new ParsedDay(dayIndex, day.Day.Trim().ToUpperInvariant(), startTime, endTime));
+            }
+
+            
+            for (int i = 0; i < parsed.Count; i++)
+            {
+                for (int j = i + 1; j < parsed.Count; j++)
+                {
+                    if (parsed[i].DayIndex != parsed[j].DayIndex) continue;
+
+                    var a = parsed[i];
+                    var b = parsed[j];
+
+                    var overlaps = a.StartTime < b.EndTime && b.StartTime < a.EndTime;
+                    if (overlaps)
+                    {
+                        throw new ValidationException(
+                            "VALIDATION_ERROR",
+                            $"El request contiene horarios duplicados o solapados para el día {a.DayName}.");
+                    }
                 }
             }
-            return slots;
-        }
 
 
-
-
-        private HashSet<DateOnly> GetHolidaysForYear(int year)
-        {
-            return new HashSet<DateOnly>
+            foreach (var day in parsed)
             {
-                new DateOnly(year, 7, 9),
-                new DateOnly(year, 12, 25),
-            };
+                var hasOverlap = (await _persistence.GetFiltered<AvailabilityRule>(r =>
+                        r.DoctorId == request.DoctorId
+                        && r.DayOfWeek == day.DayIndex
+                        && !r.Deleted
+                        && r.Month == request.Month       
+                        && r.Year == request.Year         
+                        && !isUpdate                      
+                        && day.StartTime < r.EndTime
+                        && r.StartTime < day.EndTime) ?? Enumerable.Empty<AvailabilityRule>())
+                    .Any();
+
+                if (hasOverlap)
+                {
+                    throw new BusinessRuleException(
+                        "SCHEDULE_OVERLAP",
+                        $"El horario indicado para {day.DayName} se solapa con otra disponibilidad existente.");
+                }
+            }
+
+            return parsed;
         }
 
+        private async Task<Doctor> GetActiveDoctorOrThrowAsync(Guid doctorId)
+        { 
+            var doctor = await _persistence.First<Doctor>(d => d.Id == doctorId && !d.Deleted);
+            if (doctor is null)
+            {
+                throw new EntityNotFoundException("Doctor");
+            }
+            return doctor;
+        }
+
+        private static AvailabilityModel.Response BuildResponse(
+            AvailabilityModel.Request request, List<AvailabilityRule> rules, List<AvailabilitySlot> slots)
+        {
+            
+            var ruleSummaries = rules.Select(r => new AvailabilityModel.RuleSummary(
+                r.Id,
+                DayIndexToName(r.DayOfWeek),
+                r.StartTime.ToString(@"hh\:mm"),
+                r.EndTime.ToString(@"hh\:mm")
+            )).ToList();
+
+            return new AvailabilityModel.Response(
+                request.DoctorId,
+                request.Month,
+                request.Year,
+                rules.Count,
+                slots.Count,
+                ruleSummaries);
+        }
+
+        private static readonly string[] DayNames =
+        {
+            "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"
+        };
+
+        private static string DayIndexToName(int index) => DayNames[index];
     }
 }

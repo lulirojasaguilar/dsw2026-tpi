@@ -10,9 +10,8 @@ namespace Dsw2026Tpi.Data.Configurations
     public class AvailabilityRuleConfiguration : IEntityTypeConfiguration<AvailabilityRule>
     {
         public void Configure(EntityTypeBuilder<AvailabilityRule> builder)
-        { 
+        {
             builder.ToTable("AvailabilityRule");
-
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.DoctorId).IsRequired();
@@ -22,7 +21,15 @@ namespace Dsw2026Tpi.Data.Configurations
             builder.Property(x => x.StartTime).IsRequired();
             builder.Property(x => x.EndTime).IsRequired();
             builder.Property(x => x.Deleted).IsRequired();
-            builder.HasIndex(r => new {r.DoctorId, r.Year, r.Month, r.DayOfWeek, r.StartTime, r.EndTime})
+
+            // Corrección 1.18: sin esta FK la base permitía reglas con DoctorId inexistente.
+            builder.HasOne<Doctor>()
+                .WithMany()
+                .HasForeignKey(x => x.DoctorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Corrección 1.21: constraint UNIQUE real en la base, no solo validado en código.
+            builder.HasIndex(r => new { r.DoctorId, r.Year, r.Month, r.DayOfWeek, r.StartTime, r.EndTime })
                 .IsUnique();
         }
     }

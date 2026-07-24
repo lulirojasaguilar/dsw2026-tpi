@@ -7,23 +7,29 @@ namespace Dsw2026Tpi.Domain.Entities
     public class AvailabilityRule : EntityBase
     {
         public Guid DoctorId { get; private set; }
-        public int Month {  get; private set; }
-        public int Year { get; private set; }
-        public int DayOfWeek { get; private set; }
+
+        
+        public byte Month { get; private set; }
+        public short Year { get; private set; }
+        public byte DayOfWeek { get; private set; } // 0=Lunes...6=Domingo (convención del equipo)
 
         public TimeSpan StartTime { get; private set; }
         public TimeSpan EndTime { get; private set; }
-
         public bool Deleted { get; private set; }
 
         protected AvailabilityRule() { }
 
         public AvailabilityRule(Guid doctorId, int month, int year, int dayOfWeek, TimeSpan startTime, TimeSpan endTime)
         {
+            if (month is < 1 or > 12)
+                throw new ArgumentOutOfRangeException(nameof(month), "Month debe estar entre 1 y 12.");
+            if (dayOfWeek is < 0 or > 6)
+                throw new ArgumentOutOfRangeException(nameof(dayOfWeek), "DayOfWeek debe estar entre 0 (Lunes) y 6 (Domingo).");
+
             DoctorId = doctorId;
-            Month = month;
-            Year = year;
-            DayOfWeek = dayOfWeek;
+            Month = (byte)month;
+            Year = (short)year;
+            DayOfWeek = (byte)dayOfWeek;
             StartTime = startTime;
             EndTime = endTime;
             Deleted = false;

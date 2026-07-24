@@ -1,0 +1,3456 @@
+
+
+=== FILE: ./Dsw2026Tpi.Api/Configurations/DependencyInjectionConfigurationExtensions.cs ===
+﻿using Dsw2026Tpi.Api.Services;
+using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.Application.Services;
+using Dsw2026Tpi.Data;
+using Dsw2026Tpi.Domain.Interfaces;
+
+namespace Dsw2026Tpi.Api.Configurations;
+
+public static class DependencyInjectionConfigurationExtensions
+{
+    public static IServiceCollection AddAppDependencies(this IServiceCollection services)
+    {
+        services.AddScoped<IPersistence, PersistenceEf>();
+        services.AddScoped<IDoctorService, DoctorService>();
+        services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddScoped<ISignInService, SignInService>();
+        services.AddSingleton<JwtService>();
+
+        services.AddScoped<IAvailabilityService, AvailabilityService>();
+
+        return services;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Api/Configurations/LoggingConfigurationExtensions.cs ===
+using Serilog;
+
+namespace Dsw2026Tpi.Api.Configurations;
+
+public static class LoggingConfigurationExtensions
+{
+    public static void AddSerilogConfiguration(this WebApplicationBuilder builder)
+    {
+        // Configurar Serilog desde appsettings.json
+        Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(builder.Configuration)
+            .CreateLogger();
+
+        // Reemplazar el logger por defecto con Serilog
+        builder.Host.UseSerilog();
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Api/Configurations/PersistenceConfigurationExtensions.cs ===
+﻿using Dsw2026Tpi.Data;
+using Dsw2026Tpi.Data.Extensions;
+using Dsw2026Tpi.Data.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace Dsw2026Tpi.Api.Configurations;
+
+public static class PersistenceConfigurationExtensions
+{
+    public static IServiceCollection AddApplicationPersistence(this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        //Obtener cadena de conexión desde appsettings.json
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        //Agregar contexto (O/RM) y utilizar SQL Server para DB
+        services.AddDbContext<Dsw2026TpiDbContext>(options =>
+        {
+            options.UseSqlServer(connectionString);
+        });
+
+        services.AddDbContext<AuthenticationDbContext>(options =>
+        {
+            options.UseSqlServer(connectionString);
+            options.UseSeeding((c, t) =>
+            {
+                c.Seedwork<IdentityRole>("Sources\\roles.json");
+            });
+        });
+        return services;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Api/Configurations/SecurityConfigurationExtensions.cs ===
+﻿using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.Data.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+
+namespace Dsw2026Tpi.Api.Configurations;
+
+public static class SecurityConfigurationExtensions
+{
+    public static IServiceCollection AddAppAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        //Obtener parámetros para creación del JWT desde appsettings.json
+        var jwtConfig = configuration.GetSection("Jwt");
+        var keyText = jwtConfig["Key"] ?? throw new ArgumentNullException("JWT Key");
+        var issuer = jwtConfig["Issuer"] ?? throw new ArgumentNullException("JWT Issuer");
+        var audience = jwtConfig["Audience"] ?? throw new ArgumentNullException("JWT Audience");
+        var key = Encoding.UTF8.GetBytes(keyText);
+
+        //Agregar autenticación
+        services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+            .AddJwtBearer(options =>
+            {
+                //Definir parámetros para la generación del token
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = issuer,
+                    ValidAudience = audience,
+                    IssuerSigningKey = new SymmetricSecurityKey(key)
+                };
+            });
+        services.AddAuthorizationBuilder()
+            .AddPolicy(Policies.AdminPolicy, policy =>
+                policy.RequireRole(Roles.Administrator))
+            .AddPolicy(Policies.PatientPolicy, policy =>
+                policy.RequireRole(Roles.Patient));
+        return services;
+    }
+
+    public static IServiceCollection AddAppCors(this IServiceCollection services, IConfiguration configuration)
+    {
+        //Obtener configuración para CORS desde appsettings.json
+        var allowedOrigins = configuration
+                            .GetSection("Cors:AllowedOrigins")
+                            .Get<string[]>()?
+                            .Where(origin => !string.IsNullOrWhiteSpace(origin))
+                            .Select(origin => origin.TrimEnd('/'))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToArray();
+
+        //Si no se definió configuración en el archivo, utilizar la que se define
+        if (allowedOrigins is null || allowedOrigins.Length == 0)
+        {
+            allowedOrigins =
+            [
+                "http://localhost",
+                "https://localhost"
+            ];
+        }
+
+        //Agregar CORS con la política por defecto a partir de las URLs definidas
+        services.AddCors(options =>
+        {
+            options.AddDefaultPolicy(policy =>
+            {
+                policy.WithOrigins(allowedOrigins)
+                     .AllowAnyHeader()
+                     .AllowAnyMethod()
+                     .AllowCredentials();
+            });
+        });
+
+        return services;
+    }
+
+    public static IServiceCollection AddAppIdentity(this IServiceCollection services)
+    {
+        services.AddIdentityCore<ApplicationUser>(options =>
+        {
+            options.Password = new PasswordOptions
+            {
+                RequiredLength = 6,
+                RequireLowercase = true,
+                RequireUppercase = true,
+                RequireDigit = true
+            };
+
+        }).AddRoles<IdentityRole>()
+          .AddEntityFrameworkStores<AuthenticationDbContext>()
+          .AddSignInManager()
+          .AddDefaultTokenProviders();
+        return services;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Api/Configurations/SwaggerConfigurationExtensions.cs ===
+﻿using Microsoft.OpenApi;
+
+namespace Dsw2026Tpi.Api.Configurations;
+
+public static class SwaggerConfigurationExtensions
+{
+    public static IServiceCollection AddSwaggerConfiguration(this IServiceCollection services)
+    {
+        services.AddSwaggerGen(o =>
+        {
+            const string schemeId = "Bearer";
+            o.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "Desarollo de Software 2026",
+                Version = "v1",
+            });
+            o.AddSecurityDefinition(schemeId, new OpenApiSecurityScheme
+            {
+                In = ParameterLocation.Header,
+                Name = "Authorization",
+                Description = "Ingrese el token JWT con el prefijo 'Bearer ' (ej: Bearer eyJhbG...)",
+                Type = SecuritySchemeType.ApiKey
+            });
+            o.AddSecurityRequirement(doc =>
+            {
+                return new OpenApiSecurityRequirement
+                {
+                    {
+                        new OpenApiSecuritySchemeReference(schemeId, doc),
+                        new List<string>()
+                    }
+                };
+            });
+
+            // Configura nombres únicos para schemas con tipos anidados
+            o.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
+        });
+        return services;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Api/Controllers/AppController.cs ===
+using Microsoft.AspNetCore.Mvc;
+
+namespace Dsw2026Tpi.Api.Controllers;
+
+/// <summary>
+/// Clase base para configuraciones generales de controladores
+/// </summary>
+[ApiController]
+[Route("api")]
+public abstract class AppController : ControllerBase
+{
+}
+
+
+
+=== FILE: ./Dsw2026Tpi.Api/Controllers/AuthenticationController.cs ===
+﻿using Dsw2026Tpi.Application.Dtos;
+using Dsw2026Tpi.Application.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Dsw2026Tpi.Api.Controllers;
+
+[Route("auth")]
+public class AuthenticationController : AppController
+{
+    private readonly IAuthenticationService _authenticationService;
+
+    public AuthenticationController(IAuthenticationService authenticationService) 
+    {
+        _authenticationService = authenticationService;
+    }
+
+    [HttpPost("admin/register")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Register([FromBody] RegisterModel.Request request)
+    {
+        var result = await _authenticationService.Register(request);
+        return Ok(result.Email); 
+    }
+
+    [HttpPost("admin/login")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Login([FromBody] LoginAdminModel.Request request)
+    {
+        var result = await _authenticationService.LoginAdmin(request);
+        return Ok(result);
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Api/Controllers/AvailabilityController.cs ===
+﻿using Dsw2026Tpi.Application.Services;
+using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Identity;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Dsw2026Tpi.Api.Controllers;
+
+[ApiController]
+[Route("api/availabilities")]
+[Authorize(Policy = Policies.AdminPolicy)]
+public class AvailabilityController : ControllerBase
+{
+    private readonly IAvailabilityService _availabilityService;
+
+    public AvailabilityController(IAvailabilityService availabilityService)
+    {
+        _availabilityService = availabilityService;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateAvailabilityRule([FromBody] CreateAvailabilityRequest request)
+    {
+        try
+        {
+            var startTime = TimeSpan.Parse(request.StartTime);
+            var endTime = TimeSpan.Parse(request.EndTime);
+
+            var rule = await _availabilityService.CreateAvailabilityRuleAsync(
+                request.DoctorId,
+                request.Month,
+                request.Year,
+                request.DayOfWeek,
+                startTime,
+                endTime);
+
+            return Ok(new { Message = "Disponibilidad generada con exito", RuleId = rule.Id });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("SCHEDULE_OVERLAP"))
+        {
+            return Conflict(new { Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Error = ex.Message });
+        }
+    }
+
+
+    [HttpPut]
+    public async Task<IActionResult> UpdateAvailabilityRule([FromBody] CreateAvailabilityRequest request)
+    {
+        try
+        {
+            var startTime = TimeSpan.Parse(request.StartTime);
+            var endTime = TimeSpan.Parse(request.EndTime);
+
+            var rule = await _availabilityService.UpdateAvailabilityRuleAsync(request.DoctorId,
+            request.Month,
+            request.Year,
+            request.DayOfWeek,
+            startTime,
+            endTime);
+
+            return Ok(new { Message = "Disponibilidad sobreescrita con exito", RuleId = rule.Id });
+
+        }
+        catch(InvalidOperationException ex ) when (ex.Message.StartsWith("SCHEDULE_OVERLAP"))
+        {
+            return Conflict(new {Error = ex.Message });
+        }
+        catch (BusinessRuleException ex ) when (ex.Message.Contains("UPDATE_CONFLICT"))
+        {
+            return Conflict(new {Error = ex.Message});
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new {Error = ex.Message});
+        }
+    }
+
+    public record CreateAvailabilityRequest(
+        Guid DoctorId,
+        int Month,
+        int Year,
+        int DayOfWeek,
+        string StartTime,
+        string EndTime
+
+
+        );
+}
+
+=== FILE: ./Dsw2026Tpi.Api/Controllers/DoctorController.cs ===
+﻿using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.CrossCutting.Identity;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Dsw2026Tpi.Api.Controllers;
+
+[Route("doctors")]
+[Authorize(Policy = Policies.AdminPolicy)]
+public class DoctorController : AppController
+{
+    private readonly IDoctorService _service;
+
+    public DoctorController(IDoctorService service)
+    {
+        _service = service;
+    }
+
+    [HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll([FromQuery]int pageSize, [FromQuery]int pageIndex, [FromQuery]string? name = null)
+    {
+        var doctors = await _service.GetAll(pageSize, pageIndex, name);
+        return Ok(doctors);
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Api/Middlewares/ExceptionHandlingMiddleware.cs ===
+﻿using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.CrossCutting.Resources;
+using System.Net;
+using System.Text.Json;
+
+namespace Dsw2026Tpi.Api.Middlewares;
+
+public class ExceptionHandlingMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+
+    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Se produjo un error durante el procesamiento de la solicitud");
+            await HandleExceptionAsync(context, ex);
+        }
+    }
+
+    private async Task HandleExceptionAsync(HttpContext context, Exception ex)
+    {
+        ErrorResponse error = ex is AppException exApp ? 
+            exApp.Error : 
+            new ErrorResponse(nameof(ErrorCodes.UNHANDLED_ERROR), ErrorCodes.UNHANDLED_ERROR);
+        var status = ex switch
+        {
+            ValidationException => HttpStatusCode.BadRequest,
+            EntityNotFoundException => HttpStatusCode.NotFound,
+            ConflictException or AuthenticationException => HttpStatusCode.Conflict,
+            AuthorizationException => HttpStatusCode.Unauthorized,
+            _ => HttpStatusCode.InternalServerError,
+        };
+        var result = JsonSerializer.Serialize(error);
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = (int)status;
+        await context.Response.WriteAsync(result);
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Api/Program.cs ===
+using Dsw2026Tpi.Api.Configurations;
+using Dsw2026Tpi.Api.Middlewares;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Serilog;
+
+namespace Dsw2026Tpi.Api;
+
+public class Program
+{
+    public static async Task Main(string[] args)
+    {
+        // Inicializar con un logger simple antes de construir el host
+        Log.Logger = new LoggerConfiguration()
+            .WriteTo.Console()
+            .CreateBootstrapLogger();
+
+        try
+        {
+            Log.Information("Iniciando aplicación Dsw2026Tpi.Api");
+
+            var builder = WebApplication.CreateBuilder(args);
+
+            //Configuraciones personalizadas
+            builder.AddSerilogConfiguration();
+            builder.Services.AddAppIdentity();
+            builder.Services.AddAppAuthentication(builder.Configuration);
+            builder.Services.AddSwaggerConfiguration();
+            builder.Services.AddApplicationPersistence(builder.Configuration);
+            builder.Services.AddAppCors(builder.Configuration);
+            builder.Services.AddAppDependencies();
+            builder.Services.AddControllers();
+            builder.Services.AddHealthChecks();
+
+            var app = builder.Build();
+
+            app.UseSerilogRequestLogging();
+
+            if (app.Environment.IsProduction())
+            {
+                app.UseHttpsRedirection();
+            }
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseSwagger();
+                app.UseSwaggerUI();
+            }
+
+            app.UseAuthentication();
+            app.UseAuthorization();
+            app.UseCors();
+            app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+            app.MapControllers();
+            app.MapHealthChecks("/health-check");
+
+            Log.Information("Aplicación iniciada correctamente");
+
+            await app.RunAsync();
+        }
+        catch (HostAbortedException)
+        {
+            Log.Information("El host fue abortado (normal durante migraciones de EF Core)");
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "La aplicación falló al iniciar");
+            throw;
+        }
+        finally
+        {
+            Log.Information("Cerrando aplicación");
+            await Log.CloseAndFlushAsync();
+        }
+    }
+}
+
+
+
+=== FILE: ./Dsw2026Tpi.Api/Services/SignInService.cs ===
+﻿using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.Data.Identity;
+using Microsoft.AspNetCore.Identity;
+
+namespace Dsw2026Tpi.Api.Services;
+
+public class SignInService(SignInManager<ApplicationUser> signInManager) : ISignInService
+{
+    public async Task<bool> CheckPassword(ApplicationUser user, string password)
+    {
+        var result = await signInManager.CheckPasswordSignInAsync(user, password, false);
+        return result.Succeeded;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Dtos/DoctorModel.cs ===
+﻿namespace Dsw2026Tpi.Application.Dtos;
+
+public record DoctorModel
+{
+    public record Request(string Name, string LicenseNumber, Guid SpecialityId);
+    public record Response(Guid Id, string Name, string LicenseNumber, SpecialityDto? Speciality);
+    public record SpecialityDto(Guid? SpecialityId, string? Name);
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Dtos/LoginModel.cs ===
+﻿namespace Dsw2026Tpi.Application.Dtos;
+
+public record LoginAdminModel
+{
+    public record Request(string Email, string Password);
+    public record Response(string? Token, string? Role);
+}
+
+public record LoginPatientModel
+{
+    public record Request(string Email, long Dni);
+    public record Response(string? Token, string? Role);
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Dtos/RegisterModel.cs ===
+﻿namespace Dsw2026Tpi.Application.Dtos;
+
+public record RegisterModel
+{
+    public record Request(string Email, string Password);
+    public record Response(string Email);
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Interfaces/IAuthenticationService.cs ===
+﻿using Dsw2026Tpi.Application.Dtos;
+
+namespace Dsw2026Tpi.Application.Interfaces;
+
+public interface IAuthenticationService
+{
+    Task<RegisterModel.Response> Register(RegisterModel.Request request);
+    Task<LoginAdminModel.Response> LoginAdmin(LoginAdminModel.Request request);
+    Task<LoginPatientModel.Response> LoginPatient(LoginPatientModel.Response request);
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Interfaces/IDoctorService.cs ===
+﻿using Dsw2026Tpi.Application.Dtos;
+using Dsw2026Tpi.Domain.Entities;
+
+namespace Dsw2026Tpi.Application.Interfaces;
+
+public interface IDoctorService
+{
+    Task<Pagination<DoctorModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null);
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Interfaces/ISignInService.cs ===
+﻿using Dsw2026Tpi.Data.Identity;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Tpi.Application.Interfaces;
+
+public interface ISignInService
+{
+    Task<bool> CheckPassword(ApplicationUser user, string password);
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Services/AuthenticationService.cs ===
+﻿using Dsw2026Tpi.Application.Dtos;
+using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Helpers;
+using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.CrossCutting.Resources;
+using Dsw2026Tpi.Data.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
+
+namespace Dsw2026Tpi.Application.Services;
+
+public class AuthenticationService : IAuthenticationService
+{
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ISignInService _signInManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
+    private readonly JwtService _jwtService;
+    private readonly ILogger<AuthenticationService> _logger;
+
+    public AuthenticationService(UserManager<ApplicationUser> userManager,
+        ISignInService signInManager,
+        RoleManager<IdentityRole> roleManager,
+        JwtService jwtService,
+        ILogger<AuthenticationService> logger)
+    {
+        _userManager = userManager;
+        _signInManager = signInManager;
+        _roleManager = roleManager;
+        _jwtService = jwtService;
+        _logger = logger;
+    }
+
+    public async Task<LoginAdminModel.Response> LoginAdmin(LoginAdminModel.Request request)
+    {
+        if (!request.Email.IsEmailValid()) throw new AuthenticationException();
+        var user = await _userManager.FindByEmailAsync(request.Email) ?? throw new AuthenticationException();
+        var result = await _signInManager.CheckPassword(user, request.Password);
+
+        if (!result)
+        {
+            _logger.LogError("Intento de login fallido para: {Email}", request.Email);
+            throw new AuthenticationException();
+        }
+
+        var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault();
+
+        var token  = _jwtService.GenerateToken(user.UserName!, role);
+
+        return new LoginAdminModel.Response(
+            token,
+            role
+        );
+    }
+
+    public async Task<LoginPatientModel.Response> LoginPatient(LoginPatientModel.Response request)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task<RegisterModel.Response> Register(RegisterModel.Request request)
+    {
+        if (!request.Email.IsEmailValid()) throw new ValidationException(ErrorCodes.REGISTER_USER_INVALID,
+            nameof(ErrorCodes.REGISTER_USER_INVALID));
+
+        var user = new ApplicationUser
+        {
+            UserName = request.Email,
+            Email = request.Email,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        var result = await _userManager.CreateAsync(user, request.Password);
+
+        if (!result.Succeeded) throw new ConflictException(nameof(ErrorCodes.REGISTER_USER_CONFLICT),
+            ErrorCodes.REGISTER_USER_CONFLICT)
+                .WithDetail(result.Errors.Select(e => (e.Code, e.Description)));
+       
+        _ = await _userManager.AddToRoleAsync(user, Roles.Administrator);
+
+        _logger.LogInformation("Usuario registrado: {Email}", request.Email);
+
+        return new RegisterModel.Response(request.Email);
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Services/AvailabilityService.cs ===
+﻿using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.Data;
+using Dsw2026Tpi.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Reflection.Metadata.Ecma335;
+using System.Text;
+
+namespace Dsw2026Tpi.Application.Services
+{
+    public class AvailabilityService : IAvailabilityService
+    {
+        private readonly Dsw2026TpiDbContext _context;
+        private readonly ILogger<AvailabilityService> _logger;
+
+        public AvailabilityService(Dsw2026TpiDbContext context, ILogger<AvailabilityService> logger)
+        {
+            _context = context;
+            _logger = logger;
+        }
+
+        public async Task<AvailabilityRule> CreateAvailabilityRuleAsync(
+            Guid doctorId,
+            int month,
+            int year,
+            int dayofWeek,
+            TimeSpan startTime,
+            TimeSpan endTime)
+        {
+            _logger.LogInformation("Iniciando generación de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}", doctorId, month, year);
+
+            if (startTime >= endTime)
+            {
+                throw new ValidationException("VALIDATION_ERROR", "StartTime debe ser estrictamente menor a EndTime.");
+            }
+
+            var doctorExists = await _context.Set<Doctor>().AnyAsync(d => d.Id == doctorId && d.IsActive);
+            if (!doctorExists)
+            {
+                throw new EntityNotFoundException("Doctor");
+            }
+
+            var existingRule = _context.Set<AvailabilityRule>()
+                .Where(r => r.DoctorId == doctorId
+                && r.Month == month
+                && r.Year == year
+                && r.DayOfWeek == dayofWeek
+                && !r.Deleted
+                );
+
+            foreach (var existing in existingRule)
+            {
+                if (startTime < existing.EndTime && existing.StartTime < endTime)
+                {
+                    _logger.LogWarning("Conflicto de solapamiento detectado para el doctor {DoctorId} en el dia de la semana{DayOfWeek}", doctorId, dayofWeek);
+                    throw new BusinessRuleException("SCHEDULE_OVERLAP"," Ya existe una regla de disponibilidad que se solapa con el rango horario indicado para este dia");
+
+                }
+            }
+                var rule = new AvailabilityRule(doctorId, month, year, dayofWeek, startTime, endTime);
+
+                _context.Set<AvailabilityRule>().Add(rule);
+                var slots = GenerateSlotsForMonth(rule.Id, month, year, dayofWeek, startTime, endTime);
+                await _context.Set<AvailabilitySlot>().AddRangeAsync(slots);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Se generaron exitosamente los slots de disponibilidades para la regla {RuleID}", rule.Id);
+                return rule;
+            
+        }
+
+
+        public async Task<AvailabilityRule> UpdateAvailabilityRuleAsync(
+                   Guid doctorId,
+                   int month,
+                   int year,
+                   int dayOfWeek,
+                   TimeSpan startTime,
+                   TimeSpan endTime)
+        {
+            _logger.LogInformation("Iniciando actualización de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}, dia {DayOfWeek}", doctorId, month, year, dayOfWeek);
+
+            if (startTime >= endTime)
+            {
+                throw new ValidationException("VALIDATION_ERROR", "StartTime debe ser estrictamente menor a EndTime.");
+            }
+
+            var doctorExists = await _context.Set<Doctor>().AnyAsync(d => d.Id == doctorId && d.IsActive);
+            if (!doctorExists)
+            {
+                throw new EntityNotFoundException("Doctor");
+            }
+
+           
+            var existingRule = await _context.Set<AvailabilityRule>()
+                .FirstOrDefaultAsync(r => r.DoctorId == doctorId
+                                       && r.Month == month
+                                       && r.Year == year
+                                       && r.DayOfWeek == dayOfWeek
+                                       && !r.Deleted);
+
+            if (existingRule == null)
+            {
+                throw new EntityNotFoundException("AvailabilityRule");
+            }
+
+        
+            var existingSlots = await _context.Set<AvailabilitySlot>()
+                .Where(s => s.AvailabilityRuleId == existingRule.Id && !s.Deleted)
+                .ToListAsync();
+
+          
+            if (existingSlots.Any(s => s.Status == "BOOKED"))
+            {
+                _logger.LogWarning("Intento de sobrescritura fallido: El doctor {DoctorId} ya tiene turnos reservados para este dia.", doctorId);
+                throw new BusinessRuleException("UPDATE_CONFLICT", "No se puede sobrescribir el mes porque ya existen turnos reservados (BOOKED) para este día.");
+            }
+
+           
+            existingRule.Delete();
+            foreach (var slot in existingSlots)
+            {
+                slot.Delete();
+            }
+
+          
+            var newRule = new AvailabilityRule(doctorId, month, year, dayOfWeek, startTime, endTime);
+            _context.Set<AvailabilityRule>().Add(newRule);
+
+            var newSlots = GenerateSlotsForMonth(newRule.Id, month, year, dayOfWeek, startTime, endTime);
+            await _context.Set<AvailabilitySlot>().AddRangeAsync(newSlots);
+
+           
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Se sobrescribió exitosamente la disponibilidad para la nueva regla {RuleID}", newRule.Id);
+            return newRule;
+        }
+
+
+
+        private List<AvailabilitySlot> GenerateSlotsForMonth(Guid ruleId, int month, int year, int targetDayOfWeek, TimeSpan startTime, TimeSpan endTime)
+        {
+            var slots = new List<AvailabilitySlot>();
+
+            int daysInMonth = DateTime.DaysInMonth(year, month);
+
+            var holidays = GetHolidaysForYear(year);
+
+            for (int day = 1; day <= daysInMonth; day++)
+            {
+                var currentDate = new DateOnly(year, month, day);
+
+                if ((int)currentDate.DayOfWeek != targetDayOfWeek)
+                {
+                    continue;
+                }
+
+                if (holidays.Contains(currentDate))
+                {
+                    _logger.LogWarning("La fecha {Date} es un dia no laborable/feriado. Se omite la generacion de turnos.", currentDate);
+                    continue;
+                }
+                var currentSlotStart = startTime;
+                while (currentSlotStart.Add(TimeSpan.FromMinutes(30)) <= endTime)
+                {
+                    var currentSlotEnd = currentSlotStart.Add(TimeSpan.FromMinutes(30));
+
+                    var slot = new AvailabilitySlot(
+                        ruleId,
+                        currentDate,
+                        currentSlotStart,
+                        currentSlotEnd,
+                        status: "AVAILABLE"
+                        );
+                    slots.Add(slot);
+                    currentSlotStart = currentSlotEnd;
+                }
+            }
+            return slots;
+        }
+
+
+
+
+        private HashSet<DateOnly> GetHolidaysForYear(int year)
+        {
+            return new HashSet<DateOnly>
+            {
+                new DateOnly(year, 7, 9),
+                new DateOnly(year, 12, 25),
+            };
+        }
+
+    }
+}
+
+=== FILE: ./Dsw2026Tpi.Application/Services/DoctorService.cs ===
+﻿using Dsw2026Tpi.Application.Dtos;
+using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.Domain.Entities;
+using Dsw2026Tpi.Domain.Interfaces;
+
+namespace Dsw2026Tpi.Application.Services;
+
+public class DoctorService : IDoctorService
+{
+    private readonly IPersistence _persistence;
+
+    public DoctorService(IPersistence persistence)
+    {
+        _persistence = persistence;
+    }
+
+    public async Task<Pagination<DoctorModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null)
+    {
+        var doctors = await _persistence.Paginate<Doctor, string>(pageSize, pageIndex, d => string.IsNullOrWhiteSpace(name) ||
+                                                   d.Name.Contains(name), x => x.Name, nameof(Doctor.Speciality));
+
+        return doctors.Map(d => new DoctorModel.Response(d.Id, d.Name, d.LicenseNumber,
+            new DoctorModel.SpecialityDto(d.Speciality?.Id, d.Speciality?.Name)));
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Services/IAvailabilityService.cs ===
+﻿using Dsw2026Tpi.Domain.Entities;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Tpi.Application.Services
+{
+    public interface IAvailabilityService
+    {
+        Task<AvailabilityRule> CreateAvailabilityRuleAsync(
+            Guid doctorId,
+            int month,
+            int year,
+            int dayOfWeek,
+            TimeSpan startTime,
+            TimeSpan endTime);
+
+
+        Task<AvailabilityRule> UpdateAvailabilityRuleAsync(
+            Guid doctorId,
+            int month,
+            int year,
+            int dayOfWeek,
+            TimeSpan startTime,
+            TimeSpan endTime);
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Application/Services/JwtService.cs ===
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+
+namespace Dsw2026Tpi.Application.Services;
+
+public class JwtService
+{
+    private readonly IConfiguration _config;
+    public JwtService(IConfiguration config)
+    {
+        _config = config;
+    }
+
+    public string GenerateToken(string username, string? role)
+    {
+        if (_config == null) throw new ArgumentNullException();
+        var jwtConfig = _config.GetSection("Jwt");
+        var keyText = jwtConfig["Key"] ?? throw new ArgumentNullException("Jwt Key");
+        var issuer = jwtConfig["Issuer"] ?? throw new ArgumentNullException("Jwt Issuer");
+        var audience = jwtConfig["Audience"] ?? throw new ArgumentNullException("Jwt Audience");
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyText));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var expiresIn = int.Parse(jwtConfig["ExpiresInMinutes"] ?? "60");
+
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, username),
+            new Claim(ClaimTypes.Name, username),
+            new Claim(ClaimTypes.Role, role ?? string.Empty)
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
+            expires: DateTime.Now.AddMinutes(expiresIn),
+            signingCredentials: creds
+            );
+
+        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+        return tokenString;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Exceptions/AppException.cs ===
+using Dsw2026Tpi.CrossCutting.Models;
+
+namespace Dsw2026Tpi.CrossCutting.Exceptions;
+
+/// <summary>
+/// Excepción base para todas las excepciones de la aplicación.
+/// Incluye código de error, status HTTP y datos adicionales para facilitar el manejo global.
+/// </summary>
+public abstract class AppException : Exception
+{
+    /// <summary>
+    /// Código de error único para identificar el tipo de error
+    /// </summary>
+    public ErrorResponse Error { get; }
+
+
+    /// <summary>
+    /// Datos adicionales sobre el error (para debugging o información extra)
+    /// </summary>
+    public Dictionary<string, object>? AdditionalData { get; set; }
+
+    protected AppException(
+        string message,
+        string errorCode,
+        Exception? innerException = null)
+        : base(message, innerException)
+    {
+        Error = new ErrorResponse(errorCode, message);
+    }
+
+    /// <summary>
+    /// Agrega datos adicionales al error
+    /// </summary>
+    public AppException WithDetail(string field, string issue)
+    {
+        Error.AddDetail(field, issue);
+        return this;
+    }
+    public AppException WithDetail(IEnumerable<(string, string)> details)
+    {
+        Error.AddDetail(details);
+        return this;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Exceptions/AuthenticationException.cs ===
+using Dsw2026Tpi.CrossCutting.Resources;
+
+namespace Dsw2026Tpi.CrossCutting.Exceptions;
+
+/// <summary>
+/// Excepción que se lanza cuando falla la autenticación del usuario.
+/// </summary>
+public class AuthenticationException : AppException
+{
+    public AuthenticationException()
+        : base(
+            ErrorCodes.AUTHENTICATION_FAILED,
+            nameof(ErrorCodes.AUTHENTICATION_FAILED))
+    {
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Exceptions/AuthorizationException.cs ===
+using Dsw2026Tpi.CrossCutting.Resources;
+
+namespace Dsw2026Tpi.CrossCutting.Exceptions;
+
+/// <summary>
+/// Excepción que se lanza cuando el usuario no tiene permisos suficientes.
+/// </summary>
+public class AuthorizationException : AppException
+{
+    public AuthorizationException()
+        : base(ErrorCodes.AUTHORIZATION_FAILED, nameof(ErrorCodes.AUTHORIZATION_FAILED))
+    {
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Exceptions/BusinessRuleException.cs ===
+namespace Dsw2026Tpi.CrossCutting.Exceptions;
+
+/// <summary>
+/// Excepción que se lanza cuando se viola una regla de negocio.
+/// </summary>
+public class BusinessRuleException : AppException
+{
+    public BusinessRuleException(string message, string errorCode)
+        : base(message, errorCode)
+    {
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Exceptions/ConflictException.cs ===
+namespace Dsw2026Tpi.CrossCutting.Exceptions;
+
+/// <summary>
+/// Excepción que se lanza cuando ocurre un conflicto, por ejemplo al intentar crear un recurso duplicado.
+/// </summary>
+public class ConflictException : AppException
+{
+    public ConflictException(string errorCode, string message)
+        : base(errorCode, message)
+    {
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Exceptions/EntityNotFoundException.cs ===
+using Dsw2026Tpi.CrossCutting.Resources;
+
+namespace Dsw2026Tpi.CrossCutting.Exceptions;
+
+/// <summary>
+/// Excepción que se lanza cuando una entidad no se encuentra en la base de datos.
+/// </summary>
+public class EntityNotFoundException : AppException
+{
+    public EntityNotFoundException(string entityName)
+        : base(string.Format(ErrorCodes.ENTITY_NOTFOUND, entityName),
+            nameof(ErrorCodes.ENTITY_NOTFOUND))
+    {
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Exceptions/ValidationException.cs ===
+using Dsw2026Tpi.CrossCutting.Resources;
+
+namespace Dsw2026Tpi.CrossCutting.Exceptions;
+
+/// <summary>
+/// Excepción que se lanza cuando los datos de entrada no son válidos.
+/// Puede incluir múltiples errores de validación.
+/// </summary>
+public class ValidationException : AppException
+{
+    public ValidationException()
+        : base(
+            ErrorCodes.VALIDATION_ERROR,
+            nameof(ErrorCodes.VALIDATION_ERROR))
+    {
+    }
+
+    public ValidationException(string message, string errorCode)
+        : base(message, errorCode)
+    {
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Helpers/ValidationsExtensions.cs ===
+﻿using System.Text.RegularExpressions;
+
+namespace Dsw2026Tpi.CrossCutting.Helpers;
+
+public static class ValidationsExtensions
+{
+    public const string EmailPattern = @"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$";
+    public static bool IsEmailValid(this string? email)
+    {
+        return !string.IsNullOrWhiteSpace(email) &&
+            Regex.IsMatch(email, EmailPattern);
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Identity/Policies.cs ===
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Tpi.CrossCutting.Identity;
+
+public class Policies
+{
+    public const string AdminPolicy = "AdminPolicy";
+    public const string PatientPolicy = "PatientPolicy";
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Identity/Roles.cs ===
+﻿namespace Dsw2026Tpi.CrossCutting.Identity;
+
+public class Roles
+{
+    public const string Administrator = "Administrador";
+    public const string Patient = "Paciente";
+}
+
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Models/ResponseBase.cs ===
+﻿namespace Dsw2026Tpi.CrossCutting.Models;
+
+public record ErrorResponse(string ErrorCode, string Message)
+{
+    public ICollection<ErrorDetail> Details { get; } = [];
+    public void AddDetail(string field, string issue)
+    {
+        Details.Add(new ErrorDetail(field, issue));
+    }
+    public void AddDetail(IEnumerable<(string, string)> details)
+    {
+        foreach (var detail in details)
+        {
+            AddDetail(detail.Item1, detail.Item2);
+        }
+    }
+}
+public record ErrorDetail(string Field, string Issue);
+
+=== FILE: ./Dsw2026Tpi.CrossCutting/Resources/ErrorCodes.Designer.cs ===
+﻿//------------------------------------------------------------------------------
+// <auto-generated>
+//     This code was generated by a tool.
+//     Runtime Version:4.0.30319.42000
+//
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+namespace Dsw2026Tpi.CrossCutting.Resources {
+    using System;
+    
+    
+    /// <summary>
+    ///   A strongly-typed resource class, for looking up localized strings, etc.
+    /// </summary>
+    // This class was auto-generated by the StronglyTypedResourceBuilder
+    // class via a tool like ResGen or Visual Studio.
+    // To add or remove a member, edit your .ResX file then rerun ResGen
+    // with the /str option, or rebuild your VS project.
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+    [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
+    public class ErrorCodes {
+        
+        private static global::System.Resources.ResourceManager resourceMan;
+        
+        private static global::System.Globalization.CultureInfo resourceCulture;
+        
+        [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
+        internal ErrorCodes() {
+        }
+        
+        /// <summary>
+        ///   Returns the cached ResourceManager instance used by this class.
+        /// </summary>
+        [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
+        public static global::System.Resources.ResourceManager ResourceManager {
+            get {
+                if (object.ReferenceEquals(resourceMan, null)) {
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Dsw2026Tpi.CrossCutting.Resources.ErrorCodes", typeof(ErrorCodes).Assembly);
+                    resourceMan = temp;
+                }
+                return resourceMan;
+            }
+        }
+        
+        /// <summary>
+        ///   Overrides the current thread's CurrentUICulture property for all
+        ///   resource lookups using this strongly typed resource class.
+        /// </summary>
+        [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
+        public static global::System.Globalization.CultureInfo Culture {
+            get {
+                return resourceCulture;
+            }
+            set {
+                resourceCulture = value;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Usuario o contraseña incorrectos.
+        /// </summary>
+        public static string AUTHENTICATION_FAILED {
+            get {
+                return ResourceManager.GetString("AUTHENTICATION_FAILED", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Se requieren permisos para la operación solicitada.
+        /// </summary>
+        public static string AUTHORIZATION_FAILED {
+            get {
+                return ResourceManager.GetString("AUTHORIZATION_FAILED", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to La entidad {0} no se encontró.
+        /// </summary>
+        public static string ENTITY_NOTFOUND {
+            get {
+                return ResourceManager.GetString("ENTITY_NOTFOUND", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Se produjo un error al registrar el usuario.
+        /// </summary>
+        public static string REGISTER_USER_CONFLICT {
+            get {
+                return ResourceManager.GetString("REGISTER_USER_CONFLICT", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Datos de registración de usuario no válidos.
+        /// </summary>
+        public static string REGISTER_USER_INVALID {
+            get {
+                return ResourceManager.GetString("REGISTER_USER_INVALID", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Se produjo un error no controlado.
+        /// </summary>
+        public static string UNHANDLED_ERROR {
+            get {
+                return ResourceManager.GetString("UNHANDLED_ERROR", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Uno o más errores de validación ocurrieron.
+        /// </summary>
+        public static string VALIDATION_ERROR {
+            get {
+                return ResourceManager.GetString("VALIDATION_ERROR", resourceCulture);
+            }
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Configurations/AvailabilityRuleConfiguration.cs ===
+﻿using Dsw2026Tpi.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Tpi.Data.Configurations
+{
+    public class AvailabilityRuleConfiguration : IEntityTypeConfiguration<AvailabilityRule>
+    {
+        public void Configure(EntityTypeBuilder<AvailabilityRule> builder)
+        { 
+            builder.ToTable("AvailabilityRule");
+
+            builder.HasKey(x => x.Id);
+
+            builder.Property(x => x.DoctorId).IsRequired();
+            builder.Property(x => x.Month).IsRequired();
+            builder.Property(x => x.Year).IsRequired();
+            builder.Property(x => x.DayOfWeek).IsRequired();
+            builder.Property(x => x.StartTime).IsRequired();
+            builder.Property(x => x.EndTime).IsRequired();
+            builder.Property(x => x.Deleted).IsRequired();
+            builder.HasIndex(r => new {r.DoctorId, r.Year, r.Month, r.DayOfWeek, r.StartTime, r.EndTime})
+                .IsUnique();
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Configurations/AvailabilitySlotConfiguration.cs ===
+﻿using Dsw2026Tpi.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Tpi.Data.Configurations
+{
+   public class AvailabilitySlotConfiguration : IEntityTypeConfiguration<AvailabilitySlot>
+    {
+
+        public void Configure(EntityTypeBuilder<AvailabilitySlot> builder)
+        {
+            builder.ToTable("AvailabilitySlot");
+
+            builder.HasKey(x => x.Id);
+
+            builder.Property(x => x.AvailabilityRuleId).IsRequired();
+            builder.Property(x => x.SlotDate).IsRequired();
+            builder.Property(x => x.StartTime).IsRequired();
+            builder.Property(x => x.EndTime).IsRequired();
+
+            builder.Property(x => x.Status)
+                .IsRequired()
+                .HasMaxLength(20);
+
+            builder.Property(x => x.Deleted).IsRequired();
+
+            builder.HasOne<AvailabilityRule>()
+                .WithMany()
+                .HasForeignKey(x =>  x.AvailabilityRuleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+
+            builder.HasIndex(s => new { s.AvailabilityRuleId, s.SlotDate, s.StartTime })
+                .IsUnique();
+        }
+
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Configurations/DoctorConfiguration.cs ===
+﻿using Dsw2026Tpi.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace Dsw2026Tpi.Data.Configurations;
+
+public class DoctorConfiguration : IEntityTypeConfiguration<Doctor>
+{
+    public void Configure(EntityTypeBuilder<Doctor> builder)
+    {
+        builder.ToTable("Doctors");
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Configurations/SpecialityConfiguration.cs ===
+﻿using Dsw2026Tpi.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace Dsw2026Tpi.Data.Configurations;
+
+public class SpecialityConfiguration : IEntityTypeConfiguration<Speciality>
+{
+    public void Configure(EntityTypeBuilder<Speciality> builder)
+    {
+        builder.ToTable("Specialities");
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Dsw2026TpiDbContext.cs ===
+﻿using Dsw2026Tpi.Data.Configurations;
+using Microsoft.EntityFrameworkCore;
+using System.Reflection;
+
+namespace Dsw2026Tpi.Data;
+
+public class Dsw2026TpiDbContext: DbContext
+{
+    public Dsw2026TpiDbContext(DbContextOptions<Dsw2026TpiDbContext> options):
+        base(options)
+    {
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+    
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Extensions/DbContextExtensions.cs ===
+﻿using Dsw2026Tpi.Data.Options;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+
+namespace Dsw2026Tpi.Data.Extensions;
+
+public static class DbContextExtensions
+{
+    public static void Seedwork<T>(this DbContext context, string dataSource) where T : class
+    {
+        if (context.Set<T>().Any()) return;
+        var json = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, dataSource));
+        var entities = JsonSerializer.Deserialize<List<T>>(json, JsonOptions.JsonSerializerOptions);
+        if (entities == null || entities.Count == 0) return;
+        context.Set<T>().AddRange(entities);
+        context.SaveChanges();
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Identity/ApplicationUser.cs ===
+﻿using Microsoft.AspNetCore.Identity;
+
+namespace Dsw2026Tpi.Data.Identity;
+
+public class ApplicationUser: IdentityUser
+{
+    public bool Deleted { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Identity/AuthenticationDbContext.cs ===
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+
+namespace Dsw2026Tpi.Data.Identity;
+
+public class AuthenticationDbContext: IdentityDbContext
+{
+    public AuthenticationDbContext(DbContextOptions<AuthenticationDbContext> options)
+            : base(options)
+    {
+
+    }
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        builder.Entity<ApplicationUser>(b => { b.ToTable("ApplicationUsers"); });
+        builder.Entity<IdentityUser>(b => { b.ToTable("Users"); });
+        builder.Entity<IdentityRole>(b => { b.ToTable("Roles"); });
+        builder.Entity<IdentityUserRole<string>>(b => { b.ToTable("UsersRoles"); });
+        builder.Entity<IdentityUserClaim<string>>(b => { b.ToTable("UsersClaims"); });
+        builder.Entity<IdentityUserLogin<string>>(b => { b.ToTable("UsersLogins"); });
+        builder.Entity<IdentityRoleClaim<string>>(b => { b.ToTable("RolesClaims"); });
+        builder.Entity<IdentityUserToken<string>>(b => { b.ToTable("UsersTokens"); });
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Migrations/20260718070555_InitialAvailability.cs ===
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Dsw2026Tpi.Data.Migrations
+{
+    /// <inheritdoc />
+    public partial class InitialAvailability : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.CreateTable(
+                name: "AvailabilityRule",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    DoctorId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Month = table.Column<int>(type: "int", nullable: false),
+                    Year = table.Column<int>(type: "int", nullable: false),
+                    DayOfWeek = table.Column<int>(type: "int", nullable: false),
+                    StartTime = table.Column<TimeSpan>(type: "time", nullable: false),
+                    EndTime = table.Column<TimeSpan>(type: "time", nullable: false),
+                    Deleted = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AvailabilityRule", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Specialities",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Specialities", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AvailabilitySlot",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    AvailabilityRuleId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    SlotDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    StartTime = table.Column<TimeSpan>(type: "time", nullable: false),
+                    EndTime = table.Column<TimeSpan>(type: "time", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Deleted = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AvailabilitySlot", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AvailabilitySlot_AvailabilityRule_AvailabilityRuleId",
+                        column: x => x.AvailabilityRuleId,
+                        principalTable: "AvailabilityRule",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Doctors",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    LicenseNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    SpecialityId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Doctors", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Doctors_Specialities_SpecialityId",
+                        column: x => x.SpecialityId,
+                        principalTable: "Specialities",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AvailabilitySlot_AvailabilityRuleId",
+                table: "AvailabilitySlot",
+                column: "AvailabilityRuleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Doctors_SpecialityId",
+                table: "Doctors",
+                column: "SpecialityId");
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropTable(
+                name: "AvailabilitySlot");
+
+            migrationBuilder.DropTable(
+                name: "Doctors");
+
+            migrationBuilder.DropTable(
+                name: "AvailabilityRule");
+
+            migrationBuilder.DropTable(
+                name: "Specialities");
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Migrations/20260718070555_InitialAvailability.Designer.cs ===
+﻿// <auto-generated />
+using System;
+using Dsw2026Tpi.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+#nullable disable
+
+namespace Dsw2026Tpi.Data.Migrations
+{
+    [DbContext(typeof(Dsw2026TpiDbContext))]
+    [Migration("20260718070555_InitialAvailability")]
+    partial class InitialAvailability
+    {
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilityRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("DoctorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AvailabilityRule", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilitySlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AvailabilityRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateOnly>("SlotDate")
+                        .HasColumnType("date");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AvailabilityRuleId");
+
+                    b.ToTable("AvailabilitySlot", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Doctor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LicenseNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("SpecialityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpecialityId");
+
+                    b.ToTable("Doctors", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Speciality", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Specialities", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilitySlot", b =>
+                {
+                    b.HasOne("Dsw2026Tpi.Domain.Entities.AvailabilityRule", null)
+                        .WithMany()
+                        .HasForeignKey("AvailabilityRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Doctor", b =>
+                {
+                    b.HasOne("Dsw2026Tpi.Domain.Entities.Speciality", "Speciality")
+                        .WithMany()
+                        .HasForeignKey("SpecialityId");
+
+                    b.Navigation("Speciality");
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Migrations/20260722211831_AddAvailabilityConstraints.cs ===
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Dsw2026Tpi.Data.Migrations
+{
+    /// <inheritdoc />
+    public partial class AddAvailabilityConstraints : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Migrations/20260722211831_AddAvailabilityConstraints.Designer.cs ===
+﻿// <auto-generated />
+using System;
+using Dsw2026Tpi.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+#nullable disable
+
+namespace Dsw2026Tpi.Data.Migrations
+{
+    [DbContext(typeof(Dsw2026TpiDbContext))]
+    [Migration("20260722211831_AddAvailabilityConstraints")]
+    partial class AddAvailabilityConstraints
+    {
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilityRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("DoctorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AvailabilityRule", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilitySlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AvailabilityRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateOnly>("SlotDate")
+                        .HasColumnType("date");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AvailabilityRuleId");
+
+                    b.ToTable("AvailabilitySlot", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Doctor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LicenseNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("SpecialityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpecialityId");
+
+                    b.ToTable("Doctors", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Speciality", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Specialities", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilitySlot", b =>
+                {
+                    b.HasOne("Dsw2026Tpi.Domain.Entities.AvailabilityRule", null)
+                        .WithMany()
+                        .HasForeignKey("AvailabilityRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Doctor", b =>
+                {
+                    b.HasOne("Dsw2026Tpi.Domain.Entities.Speciality", "Speciality")
+                        .WithMany()
+                        .HasForeignKey("SpecialityId");
+
+                    b.Navigation("Speciality");
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Migrations/Dsw2026TpiDbContextModelSnapshot.cs ===
+﻿// <auto-generated />
+using System;
+using Dsw2026Tpi.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+#nullable disable
+
+namespace Dsw2026Tpi.Data.Migrations
+{
+    [DbContext(typeof(Dsw2026TpiDbContext))]
+    partial class Dsw2026TpiDbContextModelSnapshot : ModelSnapshot
+    {
+        protected override void BuildModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilityRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("DoctorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AvailabilityRule", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilitySlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AvailabilityRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateOnly>("SlotDate")
+                        .HasColumnType("date");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AvailabilityRuleId");
+
+                    b.ToTable("AvailabilitySlot", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Doctor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LicenseNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("SpecialityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpecialityId");
+
+                    b.ToTable("Doctors", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Speciality", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Specialities", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilitySlot", b =>
+                {
+                    b.HasOne("Dsw2026Tpi.Domain.Entities.AvailabilityRule", null)
+                        .WithMany()
+                        .HasForeignKey("AvailabilityRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Doctor", b =>
+                {
+                    b.HasOne("Dsw2026Tpi.Domain.Entities.Speciality", "Speciality")
+                        .WithMany()
+                        .HasForeignKey("SpecialityId");
+
+                    b.Navigation("Speciality");
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Migrations/Identity/20260708173738_Initial_Model.cs ===
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Dsw2026Tpi.Data.Migrations.Identity
+{
+    /// <inheritdoc />
+    public partial class Initial_Model : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.CreateTable(
+                name: "Roles",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    NormalizedName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    ConcurrencyStamp = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Roles", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Users",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    UserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    NormalizedUserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    NormalizedEmail = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    EmailConfirmed = table.Column<bool>(type: "bit", nullable: false),
+                    PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    SecurityStamp = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ConcurrencyStamp = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PhoneNumberConfirmed = table.Column<bool>(type: "bit", nullable: false),
+                    TwoFactorEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    LockoutEnd = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    LockoutEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    AccessFailedCount = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Users", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RolesClaims",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    RoleId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    ClaimType = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ClaimValue = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RolesClaims", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RolesClaims_Roles_RoleId",
+                        column: x => x.RoleId,
+                        principalTable: "Roles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ApplicationUsers",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    Deleted = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ApplicationUsers", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ApplicationUsers_Users_Id",
+                        column: x => x.Id,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UsersClaims",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    ClaimType = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ClaimValue = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UsersClaims", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_UsersClaims_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UsersLogins",
+                columns: table => new
+                {
+                    LoginProvider = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    ProviderKey = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    ProviderDisplayName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UsersLogins", x => new { x.LoginProvider, x.ProviderKey });
+                    table.ForeignKey(
+                        name: "FK_UsersLogins_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UsersRoles",
+                columns: table => new
+                {
+                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    RoleId = table.Column<string>(type: "nvarchar(450)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UsersRoles", x => new { x.UserId, x.RoleId });
+                    table.ForeignKey(
+                        name: "FK_UsersRoles_Roles_RoleId",
+                        column: x => x.RoleId,
+                        principalTable: "Roles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UsersRoles_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UsersTokens",
+                columns: table => new
+                {
+                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    LoginProvider = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    Value = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UsersTokens", x => new { x.UserId, x.LoginProvider, x.Name });
+                    table.ForeignKey(
+                        name: "FK_UsersTokens_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "RoleNameIndex",
+                table: "Roles",
+                column: "NormalizedName",
+                unique: true,
+                filter: "[NormalizedName] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RolesClaims_RoleId",
+                table: "RolesClaims",
+                column: "RoleId");
+
+            migrationBuilder.CreateIndex(
+                name: "EmailIndex",
+                table: "Users",
+                column: "NormalizedEmail");
+
+            migrationBuilder.CreateIndex(
+                name: "UserNameIndex",
+                table: "Users",
+                column: "NormalizedUserName",
+                unique: true,
+                filter: "[NormalizedUserName] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UsersClaims_UserId",
+                table: "UsersClaims",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UsersLogins_UserId",
+                table: "UsersLogins",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UsersRoles_RoleId",
+                table: "UsersRoles",
+                column: "RoleId");
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropTable(
+                name: "ApplicationUsers");
+
+            migrationBuilder.DropTable(
+                name: "RolesClaims");
+
+            migrationBuilder.DropTable(
+                name: "UsersClaims");
+
+            migrationBuilder.DropTable(
+                name: "UsersLogins");
+
+            migrationBuilder.DropTable(
+                name: "UsersRoles");
+
+            migrationBuilder.DropTable(
+                name: "UsersTokens");
+
+            migrationBuilder.DropTable(
+                name: "Roles");
+
+            migrationBuilder.DropTable(
+                name: "Users");
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Migrations/Identity/20260708173738_Initial_Model.Designer.cs ===
+﻿// <auto-generated />
+using System;
+using Dsw2026Tpi.Data.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+#nullable disable
+
+namespace Dsw2026Tpi.Data.Migrations.Identity
+{
+    [DbContext(typeof(AuthenticationDbContext))]
+    [Migration("20260708173738_Initial_Model")]
+    partial class Initial_Model
+    {
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("NormalizedName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("RoleNameIndex")
+                        .HasFilter("[NormalizedName] IS NOT NULL");
+
+                    b.ToTable("Roles", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClaimType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ClaimValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RoleId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("RolesClaims", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUser", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("AccessFailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("LockoutEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("NormalizedEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("NormalizedUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("PhoneNumberConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("TwoFactorEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedEmail")
+                        .HasDatabaseName("EmailIndex");
+
+                    b.HasIndex("NormalizedUserName")
+                        .IsUnique()
+                        .HasDatabaseName("UserNameIndex")
+                        .HasFilter("[NormalizedUserName] IS NOT NULL");
+
+                    b.ToTable("Users", (string)null);
+
+                    b.UseTptMappingStrategy();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClaimType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ClaimValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UsersClaims", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
+                {
+                    b.Property<string>("LoginProvider")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ProviderKey")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ProviderDisplayName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("LoginProvider", "ProviderKey");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UsersLogins", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RoleId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("UserId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("UsersRoles", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("LoginProvider")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("UserId", "LoginProvider", "Name");
+
+                    b.ToTable("UsersTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Data.Identity.ApplicationUser", b =>
+                {
+                    b.HasBaseType("Microsoft.AspNetCore.Identity.IdentityUser");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.ToTable("ApplicationUsers", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Data.Identity.ApplicationUser", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithOne()
+                        .HasForeignKey("Dsw2026Tpi.Data.Identity.ApplicationUser", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Migrations/Identity/AuthenticationDbContextModelSnapshot.cs ===
+﻿// <auto-generated />
+using System;
+using Dsw2026Tpi.Data.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+#nullable disable
+
+namespace Dsw2026Tpi.Data.Migrations.Identity
+{
+    [DbContext(typeof(AuthenticationDbContext))]
+    partial class AuthenticationDbContextModelSnapshot : ModelSnapshot
+    {
+        protected override void BuildModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("NormalizedName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("RoleNameIndex")
+                        .HasFilter("[NormalizedName] IS NOT NULL");
+
+                    b.ToTable("Roles", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClaimType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ClaimValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RoleId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("RolesClaims", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUser", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("AccessFailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("LockoutEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("NormalizedEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("NormalizedUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("PhoneNumberConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("TwoFactorEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedEmail")
+                        .HasDatabaseName("EmailIndex");
+
+                    b.HasIndex("NormalizedUserName")
+                        .IsUnique()
+                        .HasDatabaseName("UserNameIndex")
+                        .HasFilter("[NormalizedUserName] IS NOT NULL");
+
+                    b.ToTable("Users", (string)null);
+
+                    b.UseTptMappingStrategy();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClaimType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ClaimValue")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UsersClaims", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
+                {
+                    b.Property<string>("LoginProvider")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ProviderKey")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ProviderDisplayName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("LoginProvider", "ProviderKey");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UsersLogins", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RoleId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("UserId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("UsersRoles", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("LoginProvider")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("UserId", "LoginProvider", "Name");
+
+                    b.ToTable("UsersTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Data.Identity.ApplicationUser", b =>
+                {
+                    b.HasBaseType("Microsoft.AspNetCore.Identity.IdentityUser");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.ToTable("ApplicationUsers", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Data.Identity.ApplicationUser", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithOne()
+                        .HasForeignKey("Dsw2026Tpi.Data.Identity.ApplicationUser", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/Options/JsonOptions.cs ===
+﻿using System.Text.Json;
+
+namespace Dsw2026Tpi.Data.Options;
+
+public class JsonOptions
+{
+    public static JsonSerializerOptions JsonSerializerOptions => new()
+    {
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+}
+
+
+=== FILE: ./Dsw2026Tpi.Data/PersistenceEf.cs ===
+﻿using Dsw2026Tpi.Domain.Entities;
+using Dsw2026Tpi.Domain.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+
+namespace Dsw2026Tpi.Data;
+
+public class PersistenceEf: IPersistence
+{
+    private readonly Dsw2026TpiDbContext _context;
+
+    public PersistenceEf(Dsw2026TpiDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<T> Add<T>(T entity) where T : EntityBase
+    {
+        await _context.AddAsync(entity);
+        await _context.SaveChangesAsync();
+        return entity;
+    }
+
+    public async Task<T> Delete<T>(T entity) where T : EntityBase
+    {
+        var a = entity.Id;
+        _context.Remove(entity);
+        await _context.SaveChangesAsync();
+        return entity;
+    }
+
+    public async Task<T?> First<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase
+    {
+        return await Include(_context.Set<T>(), include).FirstOrDefaultAsync(predicate);
+    }
+
+    public async Task<IEnumerable<T>?> GetAll<T>(params string[] include) where T : EntityBase
+    {
+        return await Include(_context.Set<T>(), include).ToListAsync();
+    }
+
+    public async Task<T?> GetById<T>(Guid id, params string[] include) where T : EntityBase
+    {
+        return await Include(_context.Set<T>(), include).FirstOrDefaultAsync(e => e.Id == id);
+    }
+
+    public async Task<IEnumerable<T>?> GetFiltered<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase
+    {
+        return await Include(_context.Set<T>(), include).Where(predicate).ToListAsync();
+    }
+
+    public async Task<T> Update<T>(T entity) where T : EntityBase
+    {
+        _context.Update(entity);
+        await _context.SaveChangesAsync();
+        return entity;
+    }
+
+    public async Task<Pagination<T>> Paginate<T, TKey>(int pageSize, int pageIndex, Expression<Func<T, bool>> predicate, Expression<Func<T, TKey>> sortOrder, params string[] includes) where T : EntityBase
+    {
+        pageSize = Math.Abs(pageSize);
+        pageIndex = Math.Abs(pageIndex) == 0 ? 0 : Math.Abs(pageIndex) - 1;
+
+        var filtered = Include(_context.Set<T>(), includes)
+                 .Where(predicate)
+                 .OrderBy(sortOrder);
+
+        var total = await filtered.CountAsync();
+
+        
+        async Task<Pagination<T>> GetPage(int skip, int take)
+        {
+            var data = await filtered.Skip(skip)
+                    .Take(take)
+                    .ToListAsync();
+
+            return new Pagination<T>(pageSize, pageIndex, total, data);
+        }
+        
+        //la pagina existe
+        if (total > pageSize * pageIndex)
+        {
+            return await GetPage(pageIndex * pageSize, pageSize);
+        }
+
+        //solo hay una pagina
+        if (total < pageSize)
+        {
+            return new Pagination<T>(pageSize, pageIndex, total, await filtered.ToListAsync());
+        }
+
+        var targetPageIndex = pageIndex - 1;
+
+        while (true)
+        {
+            if (total > targetPageIndex * pageSize)
+            {
+                return await GetPage(targetPageIndex * pageSize, pageSize);
+            }
+
+            targetPageIndex--;
+
+            if (targetPageIndex < 0) return new Pagination<T>(pageSize, 0, 0, []);
+        }
+    }
+
+    private static IQueryable<T> Include<T>(IQueryable<T> query, string[] includes) where T : EntityBase
+    {
+        var includedQuery = query;
+
+        foreach (var include in includes)
+        {
+            includedQuery = includedQuery.Include(include);
+        }
+        return includedQuery;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Domain/Entities/AvailabilityRule.cs ===
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Tpi.Domain.Entities
+{
+    public class AvailabilityRule : EntityBase
+    {
+        public Guid DoctorId { get; private set; }
+        public int Month {  get; private set; }
+        public int Year { get; private set; }
+        public int DayOfWeek { get; private set; }
+
+        public TimeSpan StartTime { get; private set; }
+        public TimeSpan EndTime { get; private set; }
+
+        public bool Deleted { get; private set; }
+
+        protected AvailabilityRule() { }
+
+        public AvailabilityRule(Guid doctorId, int month, int year, int dayOfWeek, TimeSpan startTime, TimeSpan endTime)
+        {
+            DoctorId = doctorId;
+            Month = month;
+            Year = year;
+            DayOfWeek = dayOfWeek;
+            StartTime = startTime;
+            EndTime = endTime;
+            Deleted = false;
+        }
+
+        public void Delete()
+        {
+            Deleted = true;
+        }
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Domain/Entities/AvailabilitySlot.cs ===
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Dsw2026Tpi.Domain.Entities
+{
+    public class AvailabilitySlot : EntityBase
+    {
+        public Guid AvailabilityRuleId { get;private set; }
+        public DateOnly SlotDate { get;private set; }
+        public TimeSpan StartTime { get;private set; }
+        public TimeSpan EndTime { get;private set; }
+
+        public string Status { get;private set; }
+        public bool Deleted { get;private set; }
+
+        public AvailabilitySlot() { }
+
+        public AvailabilitySlot(Guid availabilityRuleId, DateOnly slotDate, TimeSpan startTime, TimeSpan endTime, string status)
+        {
+            AvailabilityRuleId = availabilityRuleId;
+            SlotDate = slotDate;
+            StartTime = startTime;
+            EndTime = endTime;
+            Status = status;
+            Deleted = false;
+        }
+        public void Delete()
+        {
+            Deleted = true;
+        }
+
+        public void MarkAsBooked() => Status = "BOOKED";
+        public void MarkAsBlocked() => Status = "BLOCKED";
+
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Domain/Entities/Doctor.cs ===
+﻿namespace Dsw2026Tpi.Domain.Entities;
+
+public class Doctor: EntityBase
+{
+    public string Name { get; init; }
+    public string LicenseNumber { get; init; }
+    public bool IsActive { get; private set; }
+    public Guid? SpecialityId { get; set; }
+    public Speciality? Speciality { get; private set; }
+
+    #region Constructor for EF
+#pragma warning disable CS8618
+    private Doctor()
+    {
+    }
+#pragma warning restore CS8618
+    #endregion
+
+    public Doctor(string name, string licenseNumber, Speciality speciality, Guid? id = null) : base(id)
+    {
+        Name = name;
+        LicenseNumber = licenseNumber;
+        Speciality = speciality;
+        IsActive = true;
+    }
+
+    public void Deactivate()
+    {
+        IsActive = false;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Domain/Entities/EntityBase.cs ===
+﻿namespace Dsw2026Tpi.Domain.Entities;
+
+public abstract class EntityBase(Guid? id = null)
+{
+    public Guid Id { get; init; } = id ?? Guid.NewGuid();
+
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Domain/Entities/Pagination.cs ===
+﻿namespace Dsw2026Tpi.Domain.Entities;
+
+public record Pagination<T>(int PageSize, int PageIndex, int Total, IEnumerable<T> Data)
+{
+    public Pagination<TMap> Map<TMap>(Func<T, TMap> map) => new(PageSize, PageIndex, Total, Data.Select(map));
+
+    public static Pagination<T> Empty => new(0, 0, 0, []);
+};
+
+
+=== FILE: ./Dsw2026Tpi.Domain/Entities/Speciality.cs ===
+﻿namespace Dsw2026Tpi.Domain.Entities;
+
+public class Speciality: EntityBase
+{
+    public string Name { get; init; }
+    public string Description { get; init; }
+
+    #region Constructor for EF
+#pragma warning disable CS8618
+    private Speciality() { }
+#pragma warning restore CS8618
+    #endregion
+
+    public Speciality(string name, string description, Guid? id = null) : base(id)
+    {
+        Name = name;
+        Description = description;
+    }
+}
+
+
+=== FILE: ./Dsw2026Tpi.Domain/Interfaces/IPersistence.cs ===
+﻿using Dsw2026Tpi.Domain.Entities;
+using System.Linq.Expressions;
+
+namespace Dsw2026Tpi.Domain.Interfaces;
+
+public interface IPersistence
+{
+    Task<T?> GetById<T>(Guid id, params string[] include) where T : EntityBase;
+    Task<IEnumerable<T>?> GetAll<T>(params string[] include) where T : EntityBase;
+    Task<T?> First<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase;
+    Task<IEnumerable<T>?> GetFiltered<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase;
+    Task<T> Add<T>(T entity) where T : EntityBase;
+    Task<T> Update<T>(T entity) where T : EntityBase;
+    Task<T> Delete<T>(T entity) where T : EntityBase;
+    Task<Pagination<T>> Paginate<T, TKey>(int pageSize, int pageIndex, Expression<Func<T, bool>> predicate, Expression<Func<T, TKey>> sortOrder, params string[] includes) where T : EntityBase;
+}
