@@ -1,10 +1,8 @@
 ﻿using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.Domain.Constants;
 using Dsw2026Tpi.Domain.Entities;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
+
 
 namespace Dsw2026Tpi.Application.Services
 {
@@ -23,7 +21,7 @@ namespace Dsw2026Tpi.Application.Services
             var index = Array.IndexOf(DayNames, normalized);
             if (index == -1)
             {
-                throw new ValidationException("VALIDATION_ERROR", $"El día '{day}' no es válido. Use MONDAY..SUNDAY.");
+                throw new ValidationException($"El día '{day}' no es válido. Use MONDAY..SUNDAY.", "VALIDATION_ERROR");
             }
             return index;
         }
@@ -39,7 +37,7 @@ namespace Dsw2026Tpi.Application.Services
         {
             if (!TimeSpan.TryParseExact(value, @"hh\:mm", CultureInfo.InvariantCulture, out var result))
             {
-                throw new ValidationException("VALIDATION_ERROR", $"{fieldName} debe tener formato HH:mm.");
+                throw new ValidationException($"{fieldName} debe tener formato HH:mm.", "VALIDATION_ERROR");
             }
             return result;
         }
@@ -49,19 +47,19 @@ namespace Dsw2026Tpi.Application.Services
         {
             if (startTime >= endTime)
             {
-                throw new ValidationException("VALIDATION_ERROR", "StartTime debe ser estrictamente menor a EndTime.");
+                throw new ValidationException("StartTime debe ser estrictamente menor a EndTime.", "VALIDATION_ERROR");
             }
 
             var duration = endTime - startTime;
 
             if (duration < TimeSpan.FromMinutes(30))
             {
-                throw new ValidationException("VALIDATION_ERROR", "El rango debe permitir al menos un bloque de 30 minutos.");
+                throw new ValidationException("El rango debe permitir al menos un bloque de 30 minutos.", "VALIDATION_ERROR");
             }
 
             if (duration.TotalMinutes % 30 != 0)
             {
-                throw new ValidationException("VALIDATION_ERROR", "El rango debe ser múltiplo exacto de 30 minutos (ej. 09:00-10:15 no es válido).");
+                throw new ValidationException("El rango debe ser múltiplo exacto de 30 minutos (ej. 09:00-10:15 no es válido).", "VALIDATION_ERROR");
             }
         }
 
@@ -95,6 +93,44 @@ namespace Dsw2026Tpi.Application.Services
             DateOnly today,
             TimeSpan nowTimeOfDay)
         {
+            if (ruleId == Guid.Empty)
+            {
+                throw new ValidationException(
+                    "AvailabilityRuleId es obligatorio.",
+                    "VALIDATION_ERROR");
+            }
+
+            if (doctorId == Guid.Empty)
+            {
+                throw new ValidationException(
+                    "DoctorId es obligatorio.",
+                    "VALIDATION_ERROR");
+            }
+
+            if (month is < 1 or > 12)
+            {
+                throw new ValidationException(
+                    "Month debe estar entre 1 y 12.",
+                    "VALIDATION_ERROR");
+            }
+
+            if (year is < 1 or > 9999)
+            {
+                throw new ValidationException(
+                    "Year debe estar entre 1 y 9999.",
+                    "VALIDATION_ERROR");
+            }
+
+            if (targetDayOfWeek is < 0 or > 6)
+            {
+                throw new ValidationException(
+                    "El día de la semana debe estar entre 0 y 6.",
+                    "VALIDATION_ERROR");
+            }
+
+            ValidateRange(startTime, endTime);
+
+
             var slots = new List<AvailabilitySlot>();
             int daysInMonth = DateTime.DaysInMonth(year, month);
             var holidays = GetHolidaysForYear(year);

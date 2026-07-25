@@ -1,8 +1,6 @@
 ﻿using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.Domain.Constants;
-using System;
-using System.Collections.Generic;
-using System.Text;
+
 
 namespace Dsw2026Tpi.Domain.Entities
 {
@@ -21,9 +19,35 @@ namespace Dsw2026Tpi.Domain.Entities
         public AvailabilitySlot(
             Guid availabilityRuleId, Guid doctorId, DateOnly slotDate, TimeSpan startTime, TimeSpan endTime, string status)
         {
-            if (!AvailabilityStatuses.All.Contains(status))
+            if (availabilityRuleId == Guid.Empty)
             {
-                throw new ArgumentException($"Status '{status}' inválido. Valores permitidos: AVAILABLE, BOOKED, BLOCKED.");
+                throw new ArgumentException(
+                    "AvailabilityRuleId es obligatorio.",
+                    nameof(availabilityRuleId));
+            }
+
+            if (doctorId == Guid.Empty)
+            {
+                throw new ArgumentException(
+                    "DoctorId es obligatorio.",
+                    nameof(doctorId));
+            }
+
+            if (startTime >= endTime)
+            {
+                throw new ArgumentException(
+                    "StartTime debe ser menor a EndTime.");
+            }
+
+            if (endTime - startTime != TimeSpan.FromMinutes(30))
+            {
+                throw new ArgumentException(
+                    "Cada slot debe tener una duración exacta de 30 minutos.");
+            }
+
+            if (string.IsNullOrWhiteSpace(status) || !AvailabilityStatuses.All.Contains(status))
+            {
+                throw new ArgumentException($"Status '{status}' inválido. Valores permitidos: AVAILABLE, BOOKED, BLOCKED.", nameof(status));
             }
 
             AvailabilityRuleId = availabilityRuleId;
@@ -45,7 +69,7 @@ namespace Dsw2026Tpi.Domain.Entities
         {
             if (Status != AvailabilityStatuses.Available)
             {
-                throw new InvalidOperationException("APPOINTMENT_CONFLICT: El turno no está disponible para reservar.");
+                throw new BusinessRuleException("El turno no está disponible para reservar.", "APPOINTMENT_CONFLICT");
             }
             Status = AvailabilityStatuses.Booked;
         }
@@ -54,13 +78,20 @@ namespace Dsw2026Tpi.Domain.Entities
         {
             if (Status != AvailabilityStatuses.Available)
             {
-                throw new InvalidOperationException("APPOINTMENT_CONFLICT: Solo se puede bloquear un turno que está disponible.");
+                throw new BusinessRuleException("Solo se puede bloquear un turno que está disponible.", "APPOINTMENT_CONFLICT");
             }
             Status = AvailabilityStatuses.Blocked;
         }
 
         public void MarkAsAvailable()
         {
+            if (Status != AvailabilityStatuses.Booked)
+            {
+                throw new BusinessRuleException(
+                    "Solo un turno reservado puede volver a estar disponible.",
+                    "APPOINTMENT_CONFLICT");
+            }
+
             Status = AvailabilityStatuses.Available;
         }
     }

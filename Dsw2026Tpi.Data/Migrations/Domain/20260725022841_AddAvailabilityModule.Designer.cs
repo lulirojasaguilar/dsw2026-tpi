@@ -9,11 +9,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Dsw2026Tpi.Data.Migrations
+namespace Dsw2026Tpi.Data.Migrations.Domain
 {
     [DbContext(typeof(Dsw2026TpiDbContext))]
-    [Migration("20260718070555_InitialAvailability")]
-    partial class InitialAvailability
+    [Migration("20260725022841_AddAvailabilityModule")]
+    partial class AddAvailabilityModule
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -34,8 +34,8 @@ namespace Dsw2026Tpi.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("DayOfWeek")
-                        .HasColumnType("int");
+                    b.Property<byte>("DayOfWeek")
+                        .HasColumnType("tinyint");
 
                     b.Property<bool>("Deleted")
                         .HasColumnType("bit");
@@ -46,8 +46,8 @@ namespace Dsw2026Tpi.Data.Migrations
                     b.Property<TimeSpan>("EndTime")
                         .HasColumnType("time");
 
-                    b.Property<int>("Month")
-                        .HasColumnType("int");
+                    b.Property<byte>("Month")
+                        .HasColumnType("tinyint");
 
                     b.Property<TimeSpan>("StartTime")
                         .HasColumnType("time");
@@ -55,10 +55,13 @@ namespace Dsw2026Tpi.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("Year")
-                        .HasColumnType("int");
+                    b.Property<short>("Year")
+                        .HasColumnType("smallint");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DoctorId", "Year", "Month", "DayOfWeek", "StartTime", "EndTime")
+                        .IsUnique();
 
                     b.ToTable("AvailabilityRule", (string)null);
                 });
@@ -82,7 +85,8 @@ namespace Dsw2026Tpi.Data.Migrations
                         .HasColumnType("time");
 
                     b.Property<DateOnly>("SlotDate")
-                        .HasColumnType("date");
+                        .HasColumnType("date")
+                        .HasColumnName("Date");
 
                     b.Property<TimeSpan>("StartTime")
                         .HasColumnType("time");
@@ -97,7 +101,8 @@ namespace Dsw2026Tpi.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AvailabilityRuleId");
+                    b.HasIndex("AvailabilityRuleId", "SlotDate", "StartTime")
+                        .IsUnique();
 
                     b.ToTable("AvailabilitySlot", (string)null);
                 });
@@ -111,8 +116,11 @@ namespace Dsw2026Tpi.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
+                    b.Property<bool>("Deleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted");
 
                     b.Property<string>("LicenseNumber")
                         .IsRequired()
@@ -120,7 +128,8 @@ namespace Dsw2026Tpi.Data.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<Guid?>("SpecialityId")
                         .HasColumnType("uniqueidentifier");
@@ -135,6 +144,45 @@ namespace Dsw2026Tpi.Data.Migrations
                     b.ToTable("Doctors", (string)null);
                 });
 
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Patient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ApplicationUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Deleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("deleted");
+
+                    b.Property<long>("Dni")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Dni")
+                        .IsUnique();
+
+                    b.ToTable("Patients", (string)null);
+                });
+
             modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Speciality", b =>
                 {
                     b.Property<Guid>("Id")
@@ -144,20 +192,38 @@ namespace Dsw2026Tpi.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("[Deleted] = 0");
+
                     b.ToTable("Specialities", (string)null);
+                });
+
+            modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilityRule", b =>
+                {
+                    b.HasOne("Dsw2026Tpi.Domain.Entities.Doctor", null)
+                        .WithMany()
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilitySlot", b =>
@@ -173,7 +239,8 @@ namespace Dsw2026Tpi.Data.Migrations
                 {
                     b.HasOne("Dsw2026Tpi.Domain.Entities.Speciality", "Speciality")
                         .WithMany()
-                        .HasForeignKey("SpecialityId");
+                        .HasForeignKey("SpecialityId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Speciality");
                 });

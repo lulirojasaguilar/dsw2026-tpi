@@ -15,8 +15,6 @@ namespace Dsw2026Tpi.Application.Dtos
 
         public record Request(
             Guid DoctorId,
-            int Month,
-            int Year,
             List<DayRequest> Days
         );
 

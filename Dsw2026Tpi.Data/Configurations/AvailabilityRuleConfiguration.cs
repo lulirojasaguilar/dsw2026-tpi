@@ -20,7 +20,9 @@ namespace Dsw2026Tpi.Data.Configurations
             builder.Property(x => x.DayOfWeek).IsRequired();
             builder.Property(x => x.StartTime).IsRequired();
             builder.Property(x => x.EndTime).IsRequired();
-            builder.Property(x => x.Deleted).IsRequired();
+            builder.Property(x => x.Deleted)
+                    .HasDefaultValue(false)
+                    .IsRequired();
 
             // Corrección 1.18: sin esta FK la base permitía reglas con DoctorId inexistente.
             builder.HasOne<Doctor>()
@@ -30,7 +32,8 @@ namespace Dsw2026Tpi.Data.Configurations
 
             // Corrección 1.21: constraint UNIQUE real en la base, no solo validado en código.
             builder.HasIndex(r => new { r.DoctorId, r.Year, r.Month, r.DayOfWeek, r.StartTime, r.EndTime })
-                .IsUnique();
+                .IsUnique()
+                .HasFilter("[Deleted] = 0");
         }
     }
 }

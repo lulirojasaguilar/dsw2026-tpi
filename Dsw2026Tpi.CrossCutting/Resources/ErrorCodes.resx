@@ -138,4 +138,10 @@
   <data name="VALIDATION_ERROR" xml:space="preserve">
     <value>Uno o más errores de validación ocurrieron</value>
   </data>
+  <data name="SCHEDULE_OVERLAP" xml:space="preserve">
+    <value>El horario indicado se superpone con otra disponibilidad existente</value>
+  </data>
+  <data name="APPOINTMENT_CONFLICT" xml:space="preserve">
+    <value>No se puede realizar la operación porque existen turnos reservados o bloqueados</value>
+  </data>
 </root>
