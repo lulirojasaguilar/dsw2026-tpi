@@ -20,38 +20,51 @@ namespace Dsw2026Tpi.Api.Controllers;
 
        [HttpGet]
        [ProducesResponseType(StatusCodes.Status200OK)]
-       public async Task<IActionResult> GetAll([FromQuery] int pageSize, [FromQuery] int pageIndex, [FromQuery] string? name = null)
-       {
-        if (!string.IsNullOrWhiteSpace(name) && (name.Length < 3 || name.Length > 100))
+       [ProducesResponseType(StatusCodes.Status400BadRequest)]
+       [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+       [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> GetAll([FromQuery] int pageSize, [FromQuery] int pageIndex, [FromQuery] string? name = null)
         {
-            throw new ValidationException("El nombre debe tener entre 3 y 100 caracteres.", ErrorCodes.VALIDATION_ERROR).WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
+            var specialities = await _service.GetAll(pageSize, pageIndex, name);
+
+            return Ok(specialities);
         }
-        var specialities = await _service.GetAll(pageSize, pageIndex, name);
-           return Ok(specialities);
-       }
 
-    [HttpPost]
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    public async Task<IActionResult> Create([FromBody] SpecialityModel.Request request)
-    {
-        var speciality = await _service.Create(request);
+        [HttpPost]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> Create([FromBody] SpecialityModel.Request request)
+        {
+            var speciality = await _service.Create(request);
 
-        return StatusCode(StatusCodes.Status201Created, speciality);
-    }
+            return StatusCode(StatusCodes.Status201Created, speciality);
+        }
 
-    [HttpPut("{id}")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Update(
-    [FromRoute] Guid id,
-    [FromBody] SpecialityModel.Request request)
-    {
-        var speciality = await _service.Update(id, request);
+        [HttpPut("{id:guid}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> Update(
+        [FromRoute] Guid id,
+        [FromBody] SpecialityModel.Request request)
+        {
+            var speciality = await _service.Update(id, request);
 
-        return Ok(speciality);
-    }
+            return Ok(speciality);
+        }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+
     public async Task<IActionResult> Delete([FromRoute] Guid id)
     {
         await _service.Delete(id);
