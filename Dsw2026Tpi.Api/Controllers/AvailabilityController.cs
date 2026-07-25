@@ -8,7 +8,7 @@ namespace Dsw2026Tpi.Api.Controllers
 {
 
     [Authorize(Policy = Policies.AdminPolicy)]
-    [Route("availabilities")]
+    [Route("api/availabilities")]
  
     public class AvailabilityController : AppController
     {

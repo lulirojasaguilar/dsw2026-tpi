@@ -26,6 +26,18 @@ namespace Dsw2026Tpi.Application.Services
 
         public async Task<AvailabilityModel.Response> CreateAvailabilityAsync(AvailabilityModel.Request request)
         {
+            if (request is null)
+            {
+                throw new ValidationException(
+                    "El cuerpo de la solicitud es obligatorio.",
+                    "VALIDATION_ERROR");
+            }
+
+            if (request.DoctorId == Guid.Empty)
+            {
+                throw new ValidationException("DoctorId es obligatorio.", "VALIDATION_ERROR");
+            }
+
             var now = DateTime.Now;
             var month = now.Month;
             var year = now.Year;
@@ -36,10 +48,6 @@ namespace Dsw2026Tpi.Application.Services
                 "Iniciando generación de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}",
                 request.DoctorId, month, year);
 
-            if (request.DoctorId == Guid.Empty)
-            {
-                throw new ValidationException( "DoctorId es obligatorio.", "VALIDATION_ERROR");
-            }
 
             await GetActiveDoctorOrThrowAsync(request.DoctorId);
 
@@ -58,8 +66,15 @@ namespace Dsw2026Tpi.Application.Services
                 createdRules.Add(rule);
 
                 var slots = _generator.GenerateSlotsForMonth(
-                    rule.Id, request.DoctorId, month, year, day.DayIndex, day.StartTime, day.EndTime,
-                    today, nowTimeOfDay);
+                    rule.Id,
+                    rule.DoctorId,
+                    rule.Month,
+                    rule.Year,
+                    rule.DayOfWeek,
+                    rule.StartTime,
+                    rule.EndTime,
+                    today,
+                    nowTimeOfDay);
 
                 allSlots.AddRange(slots);
             }
@@ -92,11 +107,25 @@ namespace Dsw2026Tpi.Application.Services
                 "Se generaron {RuleCount} reglas y {SlotCount} slots para el doctor {DoctorId} en {Month}/{Year}",
                 createdRules.Count, allSlots.Count, request.DoctorId, month, year);
 
-            return BuildResponse(request, month, year, createdRules, allSlots);
+            return BuildResponse(request.DoctorId, month, year, createdRules, allSlots);
         }
 
         public async Task<AvailabilityModel.Response> UpdateAvailabilityAsync(AvailabilityModel.Request request)
         {
+            if (request is null)
+            {
+                throw new ValidationException(
+                    "El cuerpo de la solicitud es obligatorio.",
+                    "VALIDATION_ERROR");
+            }
+
+            if (request.DoctorId == Guid.Empty)
+            {
+                throw new ValidationException(
+                    "DoctorId es obligatorio.",
+                    "VALIDATION_ERROR");
+            }
+
             var now = DateTime.Now;
             var month = now.Month;
             var year = now.Year;
@@ -107,16 +136,10 @@ namespace Dsw2026Tpi.Application.Services
                 "Iniciando sobrescritura de disponibilidad para el doctor {DoctorId} en el periodo {Month}/{Year}",
                 request.DoctorId, month, year);
 
-            if (request.DoctorId == Guid.Empty)
-            {
-                throw new ValidationException(
-                    "DoctorId es obligatorio.",
-                    "VALIDATION_ERROR");
-            }
 
             await GetActiveDoctorOrThrowAsync(request.DoctorId);
 
-            var parsedDays = await ValidateAndParseRequestAsync(request, month, year, true);
+            var parsedDays = await ValidateAndParseRequestAsync(request, month, year, isUpdate: true);
 
             var existingRules = (await _persistence.GetFiltered<AvailabilityRule>(r =>
                     r.DoctorId == request.DoctorId
@@ -141,26 +164,30 @@ namespace Dsw2026Tpi.Application.Services
                 .ToList();
 
 
-            var futureSlots = existingSlots
-                   .Where(s =>
-                                s.SlotDate > today
-                                || (
-                                    s.SlotDate == today
-                                    && s.StartTime >= nowTimeOfDay
-                                ))
+            var currentAndFutureSlots = existingSlots
+                   .Where(slot =>
+                                    slot.SlotDate > today
+                                    || (
+                                    slot.SlotDate == today
+                                    && slot.StartTime >= nowTimeOfDay
+                           ))
                     .ToList();
 
-            var hasProtectedSlots = futureSlots.Any(s =>
-                 s.Status == AvailabilityStatuses.Booked
-                 || s.Status == AvailabilityStatuses.Blocked);
+            var hasProtectedSlots = currentAndFutureSlots.Any(slot =>
+                slot.Status == AvailabilityStatuses.Booked
+                || slot.Status == AvailabilityStatuses.Blocked);
 
             if (hasProtectedSlots)
             {
                 _logger.LogWarning(
-                    "Intento de sobrescritura fallido: el doctor {DoctorId} tiene turnos reservados o bloqueados en {Month}/{Year}",
-                    request.DoctorId, month, year);
+                    "Intento de sobrescritura rechazado: el doctor {DoctorId} tiene slots reservados o bloqueados en {Month}/{Year}",
+                    request.DoctorId,
+                    month,
+                    year);
 
-                throw new BusinessRuleException("No se puede sobrescribir el mes porque existen turnos reservados (BOOKED) o bloqueados (BLOCKED) para este período.", "APPOINTMENT_CONFLICT");
+                throw new BusinessRuleException(
+                    "No se puede sobrescribir el mes porque existen turnos reservados (BOOKED) o bloqueados (BLOCKED) para este período.",
+                    "APPOINTMENT_CONFLICT");
             }
 
 
@@ -184,7 +211,7 @@ namespace Dsw2026Tpi.Application.Services
                 createdRules.Add(newRule);
 
                 var slots = _generator.GenerateSlotsForMonth(
-                    newRule.Id, request.DoctorId, month, year, day.DayIndex, day.StartTime, day.EndTime,
+                    newRule.Id, newRule.DoctorId, newRule.Month, newRule.Year, newRule.DayOfWeek, newRule.StartTime, newRule.EndTime,
                     today, nowTimeOfDay);
 
                 allSlots.AddRange(slots);
@@ -225,127 +252,196 @@ namespace Dsw2026Tpi.Application.Services
                 "Se sobrescribió la disponibilidad del doctor {DoctorId} para {Month}/{Year}: {RuleCount} reglas, {SlotCount} slots nuevos",
                 request.DoctorId, month, year, createdRules.Count, allSlots.Count);
 
-            return BuildResponse(request, month, year, createdRules, allSlots);
+            return BuildResponse(
+                request.DoctorId,
+                month,
+                year,
+                createdRules,
+                allSlots);
         }
 
 
 
-        private record ParsedDay(int DayIndex, string DayName, TimeSpan StartTime, TimeSpan EndTime);
-
-        private async Task<List<ParsedDay>> ValidateAndParseRequestAsync(AvailabilityModel.Request request, int month, int year, bool isUpdate)
+        private async Task<List<ParsedDay>>
+             ValidateAndParseRequestAsync(
+                 AvailabilityModel.Request request,
+                 int month,
+                 int year,
+                 bool isUpdate)
         {
-
-            if (request.DoctorId == Guid.Empty)
-            {
-                throw new ValidationException("DoctorId es obligatorio.", "VALIDATION_ERROR");
-            }
-
-
             if (request.Days is null || request.Days.Count == 0)
             {
-                throw new ValidationException("Debe indicar al menos un día de atención.", "VALIDATION_ERROR");
+                throw new ValidationException(
+                    "Debe indicar al menos un día de atención.",
+                    "VALIDATION_ERROR");
             }
 
-            var parsed = new List<ParsedDay>();
+            var parsedDays = new List<ParsedDay>();
 
             foreach (var day in request.Days)
             {
                 if (day is null)
                 {
-                    throw new ValidationException("Cada elemento de 'days' debe contener datos válidos.", "VALIDATION_ERROR");
+                    throw new ValidationException(
+                        "Cada elemento de 'days' debe contener datos válidos.",
+                        "VALIDATION_ERROR");
                 }
 
                 if (string.IsNullOrWhiteSpace(day.Day))
                 {
-                    throw new ValidationException("El campo 'day' es obligatorio en cada elemento de 'days'.", "VALIDATION_ERROR");
+                    throw new ValidationException(
+                        "El campo 'day' es obligatorio en cada elemento de 'days'.",
+                        "VALIDATION_ERROR");
                 }
-                if (string.IsNullOrWhiteSpace(day.StartTime) || string.IsNullOrWhiteSpace(day.EndTime))
+
+                if (string.IsNullOrWhiteSpace(day.StartTime)
+                    || string.IsNullOrWhiteSpace(day.EndTime))
                 {
-                    throw new ValidationException("Los campos 'startTime' y 'endTime' son obligatorios en cada elemento de 'days'.", "VALIDATION_ERROR");
+                    throw new ValidationException(
+                        "Los campos 'startTime' y 'endTime' son obligatorios en cada elemento de 'days'.",
+                        "VALIDATION_ERROR");
                 }
 
                 var dayIndex = AvailabilityGenerator.ParseDay(day.Day);
-                var startTime = AvailabilityGenerator.ParseTime(day.StartTime, "startTime");
-                var endTime = AvailabilityGenerator.ParseTime(day.EndTime, "endTime");
 
-                AvailabilityGenerator.ValidateRange(startTime, endTime);
+                var startTime = AvailabilityGenerator.ParseTime(
+                    day.StartTime,
+                    "startTime");
 
-                parsed.Add(new ParsedDay(dayIndex, day.Day.Trim().ToUpperInvariant(), startTime, endTime));
+                var endTime = AvailabilityGenerator.ParseTime(
+                    day.EndTime,
+                    "endTime");
+
+                AvailabilityGenerator.ValidateRange(
+                    startTime,
+                    endTime);
+
+                /*
+                 * Se guarda el nombre normalizado del día.
+                 * De esta manera, aunque el cliente envíe MONDAY o lunes,
+                 * internamente se utiliza siempre LUNES.
+                 */
+                parsedDays.Add(new ParsedDay(
+                    dayIndex,
+                    DayIndexToName(dayIndex),
+                    startTime,
+                    endTime));
             }
 
+            ValidateRequestOverlaps(parsedDays);
 
-            for (int i = 0; i < parsed.Count; i++)
+            /*
+             * En el POST se compara con la disponibilidad
+             * que ya existe en la base de datos.
+             *
+             * En el PUT no es necesario porque las reglas actuales
+             * serán eliminadas lógicamente y reemplazadas.
+             */
+            if (!isUpdate)
             {
-                for (int j = i + 1; j < parsed.Count; j++)
+                foreach (var day in parsedDays)
                 {
-                    if (parsed[i].DayIndex != parsed[j].DayIndex) continue;
+                    var existingRules =
+                        await _persistence.GetFiltered<AvailabilityRule>(
+                            rule =>
+                                rule.DoctorId == request.DoctorId
+                                && rule.Month == month
+                                && rule.Year == year
+                                && rule.DayOfWeek == day.DayIndex
+                                && !rule.Deleted
+                                && day.StartTime < rule.EndTime
+                                && rule.StartTime < day.EndTime);
 
-                    var a = parsed[i];
-                    var b = parsed[j];
-
-                    var overlaps = a.StartTime < b.EndTime && b.StartTime < a.EndTime;
-                    if (overlaps)
-                    {
-                        throw new BusinessRuleException($"El request contiene horarios duplicados o solapados para el día {a.DayName}.", "SCHEDULE_OVERLAP");
-                    }
-                }
-            }
-
-
-            foreach (var day in parsed)
-            {
-                if (!isUpdate)
-                {
-                    var hasOverlap = (await _persistence.GetFiltered<AvailabilityRule>(r =>
-                        r.DoctorId == request.DoctorId
-                        && r.DayOfWeek == day.DayIndex
-                        && !r.Deleted
-                        && r.Month == month
-                        && r.Year == year
-                        && day.StartTime < r.EndTime
-                        && r.StartTime < day.EndTime)
-                    ?? Enumerable.Empty<AvailabilityRule>())
-                    .Any();
+                    var hasOverlap =
+                        (existingRules
+                         ?? Enumerable.Empty<AvailabilityRule>())
+                        .Any();
 
                     if (hasOverlap)
                     {
-                        throw new BusinessRuleException($"El horario indicado para {day.DayName} se solapa con otra disponibilidad existente.", "SCHEDULE_OVERLAP");
+                        throw new BusinessRuleException(
+                            $"El horario indicado para {day.DayName} se solapa con otra disponibilidad existente.",
+                            "SCHEDULE_OVERLAP");
                     }
                 }
             }
 
-            return parsed;
+            return parsedDays;
         }
 
-        private async Task<Doctor> GetActiveDoctorOrThrowAsync(Guid doctorId)
+        private static void ValidateRequestOverlaps(
+    List<ParsedDay> parsedDays)
         {
-            var doctor = await _persistence.First<Doctor>(d => d.Id == doctorId && !d.Deleted);
+            for (var i = 0; i < parsedDays.Count; i++)
+            {
+                for (var j = i + 1; j < parsedDays.Count; j++)
+                {
+                    var firstDay = parsedDays[i];
+                    var secondDay = parsedDays[j];
+
+                    if (firstDay.DayIndex != secondDay.DayIndex)
+                    {
+                        continue;
+                    }
+
+                    var overlaps =
+                        firstDay.StartTime < secondDay.EndTime
+                        && secondDay.StartTime < firstDay.EndTime;
+
+                    if (overlaps)
+                    {
+                        throw new BusinessRuleException(
+                            $"El request contiene horarios duplicados o solapados para el día {firstDay.DayName}.",
+                            "SCHEDULE_OVERLAP");
+                    }
+                }
+            }
+        }
+
+        private async Task<Doctor> GetActiveDoctorOrThrowAsync(
+            Guid doctorId)
+        {
+            var doctor = await _persistence.First<Doctor>(
+                currentDoctor =>
+                    currentDoctor.Id == doctorId
+                    && !currentDoctor.Deleted);
+
             if (doctor is null)
             {
                 throw new EntityNotFoundException("Doctor");
             }
+
             return doctor;
         }
 
-        private static bool IsUniqueConstraintViolation(DbUpdateException exception)
+        private static bool IsUniqueConstraintViolation(
+         DbUpdateException exception)
         {
             return exception.InnerException is SqlException sqlException
-                && (sqlException.Number == 2601 || sqlException.Number == 2627);
+                && (
+                    sqlException.Number == 2601
+                    || sqlException.Number == 2627
+                );
         }
 
         private static AvailabilityModel.Response BuildResponse(
-            AvailabilityModel.Request request, int month, int year, List<AvailabilityRule> rules, List<AvailabilitySlot> slots)
+            Guid doctorId,
+            int month,
+            int year,
+            List<AvailabilityRule> rules,
+            List<AvailabilitySlot> slots)
         {
-
-            var ruleSummaries = rules.Select(r => new AvailabilityModel.RuleSummary(
-                r.Id,
-                DayIndexToName(r.DayOfWeek),
-                r.StartTime.ToString(@"hh\:mm"),
-                r.EndTime.ToString(@"hh\:mm")
-            )).ToList();
+            var ruleSummaries = rules
+                .Select(rule =>
+                    new AvailabilityModel.RuleSummary(
+                        rule.Id,
+                        DayIndexToName(rule.DayOfWeek),
+                        rule.StartTime.ToString(@"hh\:mm"),
+                        rule.EndTime.ToString(@"hh\:mm")))
+                .ToList();
 
             return new AvailabilityModel.Response(
-                request.DoctorId,
+                doctorId,
                 month,
                 year,
                 rules.Count,
@@ -353,11 +449,33 @@ namespace Dsw2026Tpi.Application.Services
                 ruleSummaries);
         }
 
+        private static string DayIndexToName(int index)
+        {
+            if (index < 0 || index >= DayNames.Length)
+            {
+                throw new ValidationException(
+                    "El valor del día de la semana no es válido.",
+                    "VALIDATION_ERROR");
+            }
+
+            return DayNames[index];
+        }
+
+        private sealed record ParsedDay(
+            int DayIndex,
+            string DayName,
+            TimeSpan StartTime,
+            TimeSpan EndTime);
+
         private static readonly string[] DayNames =
         {
-            "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"
+            "LUNES",
+            "MARTES",
+            "MIÉRCOLES",
+            "JUEVES",
+            "VIERNES",
+            "SÁBADO",
+            "DOMINGO"
         };
-
-        private static string DayIndexToName(int index) => DayNames[index];
     }
 }

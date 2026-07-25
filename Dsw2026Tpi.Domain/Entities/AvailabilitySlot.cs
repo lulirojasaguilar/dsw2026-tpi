@@ -17,7 +17,7 @@ namespace Dsw2026Tpi.Domain.Entities
         protected AvailabilitySlot() { }
 
         public AvailabilitySlot(
-            Guid availabilityRuleId, Guid doctorId, DateOnly slotDate, TimeSpan startTime, TimeSpan endTime, string status)
+            Guid availabilityRuleId, Guid doctorId, DateOnly slotDate, TimeSpan startTime, TimeSpan endTime)
         {
             if (availabilityRuleId == Guid.Empty)
             {
@@ -45,17 +45,13 @@ namespace Dsw2026Tpi.Domain.Entities
                     "Cada slot debe tener una duración exacta de 30 minutos.");
             }
 
-            if (string.IsNullOrWhiteSpace(status) || !AvailabilityStatuses.All.Contains(status))
-            {
-                throw new ArgumentException($"Status '{status}' inválido. Valores permitidos: AVAILABLE, BOOKED, BLOCKED.", nameof(status));
-            }
 
             AvailabilityRuleId = availabilityRuleId;
             DoctorId = doctorId;
             SlotDate = slotDate;
             StartTime = startTime;
             EndTime = endTime;
-            Status = status;
+            Status = AvailabilityStatuses.Available;
             Deleted = false;
         }
 
@@ -90,6 +86,18 @@ namespace Dsw2026Tpi.Domain.Entities
                 throw new BusinessRuleException(
                     "Solo un turno reservado puede volver a estar disponible.",
                     "APPOINTMENT_CONFLICT");
+            }
+
+            Status = AvailabilityStatuses.Available;
+        }
+
+        public void Unblock()
+        {
+            if (Status != AvailabilityStatuses.Blocked)
+            {
+                throw new BusinessRuleException(
+                    "Solo se puede desbloquear un turno bloqueado.",
+                    "INVALID_SLOT_STATUS");
             }
 
             Status = AvailabilityStatuses.Available;
