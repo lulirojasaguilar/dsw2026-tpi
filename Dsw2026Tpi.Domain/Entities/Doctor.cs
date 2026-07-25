@@ -1,11 +1,11 @@
 ﻿namespace Dsw2026Tpi.Domain.Entities;
 
-public class Doctor: EntityBase
+public class Doctor : EntityBase
 {
     public string Name { get; private set; }
     public string LicenseNumber { get; private set; }
     public bool Deleted { get; private set; }
-    public Guid? SpecialityId { get; set; }
+    public Guid? SpecialityId { get; private set; }
     public Speciality? Speciality { get; private set; }
 
     #region Constructor for EF
@@ -21,7 +21,8 @@ public class Doctor: EntityBase
         Name = name;
         LicenseNumber = licenseNumber;
         Speciality = speciality;
-        Deleted = false;
+        SpecialityId = speciality.Id;
+        Deleted = false; 
     }
     public void Update(string name, string licenseNumber, Speciality speciality)
     {
@@ -30,8 +31,11 @@ public class Doctor: EntityBase
         Speciality = speciality;
         SpecialityId = speciality.Id;
     }
-    public void Delete()
+    public void Delete() 
     {
-        Deleted = true;
+        Deleted = true; 
+
     }
+
+    
 }

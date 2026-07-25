@@ -38,6 +38,7 @@ namespace Dsw2026Tpi.Application.Services
 
             var createdSpeciality =
                 await _persistence.Add(speciality);
+            await _persistence.SaveChangesAsync();
 
             return new SpecialityModel.Response(
                 createdSpeciality.Id,
@@ -66,6 +67,7 @@ namespace Dsw2026Tpi.Application.Services
             speciality.Update(request.Name, request.Description);
 
             var updatedSpeciality = await _persistence.Update(speciality);
+            await _persistence.SaveChangesAsync();
 
             return new SpecialityModel.Response(updatedSpeciality.Id, updatedSpeciality.Name, updatedSpeciality.Description);
         }
@@ -82,6 +84,7 @@ namespace Dsw2026Tpi.Application.Services
             speciality.Delete();
 
             await _persistence.Update(speciality);
+            await _persistence.SaveChangesAsync();
         }
 
         private static void ValidateRequest(SpecialityModel.Request request)
