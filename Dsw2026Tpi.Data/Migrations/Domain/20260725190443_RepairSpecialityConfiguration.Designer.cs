@@ -4,16 +4,19 @@ using Dsw2026Tpi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Dsw2026Tpi.Data.Migrations
+namespace Dsw2026Tpi.Data.Migrations.Domain
 {
     [DbContext(typeof(Dsw2026TpiDbContext))]
-    partial class Dsw2026TpiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260725190443_RepairSpecialityConfiguration")]
+    partial class RepairSpecialityConfiguration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -148,15 +151,14 @@ namespace Dsw2026Tpi.Data.Migrations
 
                     b.Property<string>("LicenseNumber")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<Guid>("SpecialityId")
+                    b.Property<Guid?>("SpecialityId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -268,8 +270,7 @@ namespace Dsw2026Tpi.Data.Migrations
                     b.HasOne("Dsw2026Tpi.Domain.Entities.Speciality", "Speciality")
                         .WithMany()
                         .HasForeignKey("SpecialityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Speciality");
                 });
