@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Dsw2026Tpi.Api.Controllers;
 
-[Route("doctors")]
+[Route("api/doctors")]
 [Authorize(Policy = Policies.AdminPolicy)]
 public class DoctorController : AppController
 {
@@ -21,13 +21,14 @@ public class DoctorController : AppController
 
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll([FromQuery]int pageSize, [FromQuery]int pageIndex, [FromQuery]string? name = null)
+    public async Task<IActionResult> GetAll([FromQuery]int pageSize, [FromQuery]int pageIndex, [FromQuery]string? name = null, [FromQuery] Guid? specialtyId = null)
     {
-        if (!string.IsNullOrWhiteSpace(name) && (name.Length < 3 || name.Length > 100))
-        {
-            throw new ValidationException("El nombre debe tener entre 3 y 100 caracteres.", ErrorCodes.VALIDATION_ERROR).WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
-        }
-        var doctors = await _service.GetAll(pageSize, pageIndex, name);
+        var doctors = await _service.GetAll(
+            pageSize,
+            pageIndex,
+            name,
+            specialtyId);
+
         return Ok(doctors);
     }
 
@@ -60,8 +61,10 @@ public class DoctorController : AppController
 
     [HttpGet("{id:guid}/availabilities")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GetAvailabilities(Guid id)
+    public async Task<IActionResult> GetAvailabilities(Guid id)
     {
-        return Ok(Array.Empty<DoctorModel.AvailabilityResponse>());
+        var availabilities = await _service.GetAvailabilities(id);
+
+        return Ok(availabilities);
     }
 }

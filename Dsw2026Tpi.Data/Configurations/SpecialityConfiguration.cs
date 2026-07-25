@@ -14,12 +14,16 @@ public class SpecialityConfiguration : IEntityTypeConfiguration<Speciality>
             .IsRequired()
             .HasMaxLength(100);
 
-        builder.HasIndex(s => s.Name)
+        builder.Property(speciality => speciality.Description)
+             .IsRequired()
+             .HasMaxLength(100);
+
+        builder.Property(speciality => speciality.Deleted)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.HasIndex(speciality => speciality.Name)
             .IsUnique()
             .HasFilter("[Deleted] = 0");
-
-        builder.Property(s => s.Description)
-            .IsRequired()
-            .HasMaxLength(100);
     }
 }

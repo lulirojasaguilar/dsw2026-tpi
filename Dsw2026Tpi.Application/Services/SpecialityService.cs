@@ -17,12 +17,29 @@ namespace Dsw2026Tpi.Application.Services
         }
         public async Task<Pagination<SpecialityModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null)
         {
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                name = name.Trim();
+
+                if (name.Length < 3 || name.Length > 100)
+                {
+                    throw new ValidationException(
+                        "El nombre debe tener entre 3 y 100 caracteres.",
+                        ErrorCodes.VALIDATION_ERROR)
+                        .WithDetail(
+                            "name",
+                            "Debe tener entre 3 y 100 caracteres.");
+                }
+            }
+
             var specialities = await _persistence.Paginate<Speciality, string>(pageSize, pageIndex, s =>!s.Deleted && (string.IsNullOrWhiteSpace(name) || s.Name.Contains(name)), s => s.Name);
             return specialities.Map(s => new SpecialityModel.Response(s.Id, s.Name, s.Description));
         }
 
         public async Task<SpecialityModel.Response> Create(SpecialityModel.Request request)
         {
+            request = NormalizeRequest(request);
+
             ValidateRequest(request);
 
             var existingSpecialities = await _persistence.GetFiltered<Speciality>(s => s.Name == request.Name && !s.Deleted);
@@ -38,6 +55,7 @@ namespace Dsw2026Tpi.Application.Services
 
             var createdSpeciality =
                 await _persistence.Add(speciality);
+
             await _persistence.SaveChangesAsync();
 
             return new SpecialityModel.Response(
@@ -48,11 +66,13 @@ namespace Dsw2026Tpi.Application.Services
 
         public async Task<SpecialityModel.Response> Update(Guid id, SpecialityModel.Request request)
         {
+            request = NormalizeRequest(request);
+
             ValidateRequest(request);
 
             var speciality = await _persistence.GetById<Speciality>(id);
 
-            if (speciality is null)
+            if (speciality is null || speciality.Deleted)
             {
                 throw new EntityNotFoundException("Speciality");
             }
@@ -67,6 +87,7 @@ namespace Dsw2026Tpi.Application.Services
             speciality.Update(request.Name, request.Description);
 
             var updatedSpeciality = await _persistence.Update(speciality);
+            
             await _persistence.SaveChangesAsync();
 
             return new SpecialityModel.Response(updatedSpeciality.Id, updatedSpeciality.Name, updatedSpeciality.Description);
@@ -76,7 +97,7 @@ namespace Dsw2026Tpi.Application.Services
         {
             var speciality = await _persistence.GetById<Speciality>(id);
 
-            if (speciality is null)
+            if (speciality is null || speciality.Deleted)
             {
                 throw new EntityNotFoundException("Speciality");
             }
@@ -85,6 +106,14 @@ namespace Dsw2026Tpi.Application.Services
 
             await _persistence.Update(speciality);
             await _persistence.SaveChangesAsync();
+        }
+
+        private static SpecialityModel.Request NormalizeRequest(
+                SpecialityModel.Request request)
+        {
+            return new SpecialityModel.Request(
+                request.Name?.Trim() ?? string.Empty,
+                request.Description?.Trim() ?? string.Empty);
         }
 
         private static void ValidateRequest(SpecialityModel.Request request)
