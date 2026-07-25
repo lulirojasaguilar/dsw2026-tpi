@@ -17,16 +17,51 @@ public class PersistenceEf: IPersistence
     public async Task<T> Add<T>(T entity) where T : EntityBase
     {
         await _context.AddAsync(entity);
-        await _context.SaveChangesAsync();
         return entity;
     }
 
-    public async Task<T> Delete<T>(T entity) where T : EntityBase
+    public async Task AddRange<T>(
+    IEnumerable<T> entities)
+    where T : EntityBase
     {
-        var a = entity.Id;
+        await _context.Set<T>().AddRangeAsync(entities);
+    }
+
+    public Task UpdateRange<T>(
+        IEnumerable<T> entities)
+        where T : EntityBase
+    {
+        _context.Set<T>().UpdateRange(entities);
+        return Task.CompletedTask;
+    }
+
+    public async Task<int> SaveChangesAsync()
+    {
+        return await _context.SaveChangesAsync();
+    }
+
+    public async Task ExecuteInTransactionAsync(
+        Func<Task> operation)
+    {
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync();
+
+        try
+        {
+            await operation();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public Task<T> Delete<T>(T entity) where T : EntityBase
+    {
         _context.Remove(entity);
-        await _context.SaveChangesAsync();
-        return entity;
+        return Task.FromResult(entity);
     }
 
     public async Task<T?> First<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase
@@ -49,11 +84,10 @@ public class PersistenceEf: IPersistence
         return await Include(_context.Set<T>(), include).Where(predicate).ToListAsync();
     }
 
-    public async Task<T> Update<T>(T entity) where T : EntityBase
+    public Task<T> Update<T>(T entity) where T : EntityBase
     {
         _context.Update(entity);
-        await _context.SaveChangesAsync();
-        return entity;
+        return Task.FromResult(entity);
     }
 
     public async Task<Pagination<T>> Paginate<T, TKey>(int pageSize, int pageIndex, Expression<Func<T, bool>> predicate, Expression<Func<T, TKey>> sortOrder, params string[] includes) where T : EntityBase

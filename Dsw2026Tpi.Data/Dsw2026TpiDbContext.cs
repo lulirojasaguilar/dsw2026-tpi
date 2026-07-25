@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Dsw2026Tpi.Data.Configurations;
+using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 
 namespace Dsw2026Tpi.Data;
@@ -14,5 +15,6 @@ public class Dsw2026TpiDbContext: DbContext
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+    
     }
 }

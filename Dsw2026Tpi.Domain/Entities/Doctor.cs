@@ -1,10 +1,12 @@
 ﻿namespace Dsw2026Tpi.Domain.Entities;
 
-public class Doctor: EntityBase
+public class Doctor : EntityBase
 {
     public string Name { get; init; }
     public string LicenseNumber { get; init; }
+
     public bool Deleted { get; private set; }
+
     public Guid? SpecialityId { get; set; }
     public Speciality? Speciality { get; private set; }
 
@@ -21,11 +23,14 @@ public class Doctor: EntityBase
         Name = name;
         LicenseNumber = licenseNumber;
         Speciality = speciality;
-        Deleted = false;
+        Deleted = false; 
     }
 
-    public void Delete()
+    public void Delete() 
     {
-        Deleted = true;
+        Deleted = true; 
+
     }
+
+    
 }

@@ -215,6 +215,7 @@ public class AuthenticationService : IAuthenticationService
             };
 
             await _persistence.Add(patient);
+            await _persistence.SaveChangesAsync();
 
             _logger.LogInformation(
                 "Paciente autoregistrado correctamente. DNI: {Dni}",

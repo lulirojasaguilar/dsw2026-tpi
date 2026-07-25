@@ -4,16 +4,19 @@ using Dsw2026Tpi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Dsw2026Tpi.Data.Migrations
+namespace Dsw2026Tpi.Data.Migrations.Domain
 {
     [DbContext(typeof(Dsw2026TpiDbContext))]
-    partial class Dsw2026TpiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260725143351_AddDoctorIdToAvailabilitySlot")]
+    partial class AddDoctorIdToAvailabilitySlot
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -43,13 +46,13 @@ namespace Dsw2026Tpi.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<TimeSpan>("EndTime")
-                        .HasColumnType("time(0)");
+                        .HasColumnType("time");
 
                     b.Property<byte>("Month")
                         .HasColumnType("tinyint");
 
                     b.Property<TimeSpan>("StartTime")
-                        .HasColumnType("time(0)");
+                        .HasColumnType("time");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -59,22 +62,11 @@ namespace Dsw2026Tpi.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasAlternateKey("Id", "DoctorId")
-                        .HasName("AK_AvailabilityRule_Id_DoctorId");
-
                     b.HasIndex("DoctorId", "Year", "Month", "DayOfWeek", "StartTime", "EndTime")
                         .IsUnique()
-                        .HasDatabaseName("UX_AvailabilityRule_ActiveRule")
                         .HasFilter("[Deleted] = 0");
 
-                    b.ToTable("AvailabilityRule", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_AvailabilityRule_DayOfWeek", "[DayOfWeek] BETWEEN 0 AND 6");
-
-                            t.HasCheckConstraint("CK_AvailabilityRule_Month", "[Month] BETWEEN 1 AND 12");
-
-                            t.HasCheckConstraint("CK_AvailabilityRule_TimeRange", "[StartTime] < [EndTime]");
-                        });
+                    b.ToTable("AvailabilityRule", (string)null);
                 });
 
             modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.AvailabilitySlot", b =>
@@ -98,13 +90,14 @@ namespace Dsw2026Tpi.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<TimeSpan>("EndTime")
-                        .HasColumnType("time(0)");
+                        .HasColumnType("time");
 
                     b.Property<DateOnly>("SlotDate")
-                        .HasColumnType("date");
+                        .HasColumnType("date")
+                        .HasColumnName("SlotDate");
 
                     b.Property<TimeSpan>("StartTime")
-                        .HasColumnType("time(0)");
+                        .HasColumnType("time");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -116,19 +109,13 @@ namespace Dsw2026Tpi.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AvailabilityRuleId", "DoctorId");
+                    b.HasIndex("AvailabilityRuleId");
 
                     b.HasIndex("DoctorId", "SlotDate", "StartTime")
                         .IsUnique()
-                        .HasDatabaseName("UX_AvailabilitySlot_Doctor_Date_StartTime")
                         .HasFilter("[Deleted] = 0");
 
-                    b.ToTable("AvailabilitySlot", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_AvailabilitySlot_Status", "[Status] IN ('AVAILABLE', 'BOOKED', 'BLOCKED')");
-
-                            t.HasCheckConstraint("CK_AvailabilitySlot_TimeRange", "[StartTime] < [EndTime]");
-                        });
+                    b.ToTable("AvailabilitySlot", (string)null);
                 });
 
             modelBuilder.Entity("Dsw2026Tpi.Domain.Entities.Doctor", b =>
@@ -254,8 +241,13 @@ namespace Dsw2026Tpi.Data.Migrations
                 {
                     b.HasOne("Dsw2026Tpi.Domain.Entities.AvailabilityRule", null)
                         .WithMany()
-                        .HasForeignKey("AvailabilityRuleId", "DoctorId")
-                        .HasPrincipalKey("Id", "DoctorId")
+                        .HasForeignKey("AvailabilityRuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dsw2026Tpi.Domain.Entities.Doctor", null)
+                        .WithMany()
+                        .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
