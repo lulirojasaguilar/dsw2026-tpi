@@ -28,7 +28,7 @@ namespace Dsw2026Tpi.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> CreateAvailability([FromBody] AvailabilityModel.Request request)
+        public async Task<ActionResult<AvailabilityModel.Response>> CreateAvailability([FromBody] AvailabilityModel.Request request)
         {
             var result = await _availabilityService.CreateAvailabilityAsync(request);
             return StatusCode( StatusCodes.Status201Created, result);
@@ -43,7 +43,7 @@ namespace Dsw2026Tpi.Api.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateAvailability([FromBody] AvailabilityModel.Request request)
+        public async Task<ActionResult<AvailabilityModel.Response>> UpdateAvailability([FromBody] AvailabilityModel.Request request)
         {
             var result = await _availabilityService.UpdateAvailabilityAsync(request);
             return Ok(result);
