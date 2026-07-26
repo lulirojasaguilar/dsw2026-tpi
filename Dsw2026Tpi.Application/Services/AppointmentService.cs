@@ -77,8 +77,8 @@ public class AppointmentService : IAppointmentService
         var existingAppointment =
             await _persistence.First<Appointment>(
                 appointment =>
-                    appointment.AvailabilityId ==
-                    request.AvailabilityId);
+                    appointment.AvailabilityId == request.AvailabilityId &&
+                    appointment.Status == AppointmentStatuses.Booked);
 
         if (existingAppointment is not null)
         {
