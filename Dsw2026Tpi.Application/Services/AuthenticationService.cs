@@ -254,38 +254,14 @@ public class AuthenticationService : IAuthenticationService
 
         var token = _jwtService.GenerateToken(
             user.UserName!,
-            role
+            role,
+            patient.Id,
+            patient.Dni
         );
 
         return new LoginPatientModel.Response(
             token,
             role.ToUpperInvariant()
         );
-    }
-
-    public async Task<RegisterModel.Response> Register(RegisterModel.Request request)
-    {
-        if (!request.Email.IsEmailValid()) throw new ValidationException(ErrorCodes.REGISTER_USER_INVALID,
-            nameof(ErrorCodes.REGISTER_USER_INVALID));
-
-        var user = new ApplicationUser
-        {
-            UserName = request.Email,
-            Email = request.Email,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        var result = await _userManager.CreateAsync(user, request.Password);
-
-        if (!result.Succeeded) throw new ConflictException(nameof(ErrorCodes.REGISTER_USER_CONFLICT),
-            ErrorCodes.REGISTER_USER_CONFLICT)
-                .WithDetail(result.Errors.Select(e => (e.Code, e.Description)));
-       
-        _ = await _userManager.AddToRoleAsync(user, Roles.Administrator);
-
-        _logger.LogInformation("Usuario registrado: {Email}", request.Email);
-
-        return new RegisterModel.Response(request.Email);
     }
 }

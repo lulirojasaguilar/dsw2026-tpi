@@ -23,7 +23,7 @@ public class SpecialityController : AppController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetAll([FromQuery] int pageSize, [FromQuery] int pageIndex, [FromQuery] string? name = null)
+    public async Task<IActionResult> GetAll([FromQuery] int pageSize=10, [FromQuery] int pageIndex=0, [FromQuery] string? name = null)
     {
         var specialities = await _service.GetAll(pageSize, pageIndex, name);
 

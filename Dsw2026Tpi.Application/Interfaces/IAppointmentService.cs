@@ -9,10 +9,11 @@ namespace Dsw2026Tpi.Application.Interfaces
             AppointmentModel.Request request);
 
         Task<IReadOnlyCollection<AppointmentModel.Response>> GetByPatient(
-            long dni);
+            Guid patientId);
 
         Task Cancel(
-            Guid id);
+            Guid id,
+            Guid patientId);
 
         Task<Pagination<AppointmentModel.Response>> GetByDate(
             DateOnly date,

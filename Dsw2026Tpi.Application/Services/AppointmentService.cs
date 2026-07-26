@@ -127,16 +127,21 @@ public class AppointmentService : IAppointmentService
     }
 
     public async Task<IReadOnlyCollection<AppointmentModel.Response>>
-        GetByPatient(long dni)
+        GetByPatient(Guid patientId)
     {
-        ValidateDni(dni);
+        if (patientId == Guid.Empty)
+        {
+            throw new ValidationException(
+                "El identificador del paciente es obligatorio.",
+                ErrorCodes.VALIDATION_ERROR)
+                .WithDetail(
+                    "patientId",
+                    "Debe indicar un identificador válido.");
+        }
 
-        var patient = await _persistence.First<Patient>(
-            patient =>
-                patient.Dni == dni &&
-                !patient.Deleted);
+        var patient = await _persistence.GetById<Patient>(patientId);
 
-        if (patient is null)
+        if (patient is null || patient.Deleted)
         {
             throw new EntityNotFoundException("Patient");
         }
@@ -198,7 +203,7 @@ public class AppointmentService : IAppointmentService
             .ToList();
     }
 
-    public async Task Cancel(Guid id)
+    public async Task Cancel(Guid id, Guid patientId)
     {
         if (id == Guid.Empty)
         {
@@ -210,12 +215,27 @@ public class AppointmentService : IAppointmentService
                     "Debe indicar un identificador válido.");
         }
 
+        if (patientId == Guid.Empty)
+        {
+            throw new ValidationException(
+                "El identificador del paciente es obligatorio.",
+                ErrorCodes.VALIDATION_ERROR)
+                .WithDetail(
+                    "patientId",
+                    "Debe indicar un identificador válido.");
+        }
+
         var appointment =
             await _persistence.GetById<Appointment>(id);
-
+       
         if (appointment is null)
         {
             throw new EntityNotFoundException("Appointment");
+        }
+
+        if (appointment.PatientId != patientId)
+        {
+            throw new AuthorizationException();
         }
 
         var slot =

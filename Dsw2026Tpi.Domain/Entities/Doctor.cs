@@ -22,7 +22,7 @@ public class Doctor : EntityBase
         LicenseNumber = licenseNumber;
         Speciality = speciality;
         SpecialityId = speciality.Id;
-        Deleted = false; 
+        Deleted = false;
     }
     public void Update(string name, string licenseNumber, Speciality speciality)
     {
@@ -31,11 +31,11 @@ public class Doctor : EntityBase
         Speciality = speciality;
         SpecialityId = speciality.Id;
     }
-    public void Delete() 
+    public void Delete()
     {
-        Deleted = true; 
+        Deleted = true;
 
     }
 
-    
+
 }

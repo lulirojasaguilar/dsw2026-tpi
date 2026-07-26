@@ -53,11 +53,15 @@ namespace Dsw2026Tpi.Api.Controllers
         public async Task<
             ActionResult<
                 IReadOnlyCollection<AppointmentModel.Response>>>
-            GetByPatient(
-                [FromQuery] long dni)
+            GetByPatient()  
         {
+            if (!TryGetPatientId(out var patientId))
+            {
+                return Forbid();
+            }
+
             var appointments =
-                await _service.GetByPatient(dni);
+                await _service.GetByPatient(patientId);
 
             return Ok(appointments);
         }
@@ -75,7 +79,14 @@ namespace Dsw2026Tpi.Api.Controllers
         public async Task<IActionResult> Cancel(
             [FromRoute] Guid id)
         {
-            await _service.Cancel(id);
+            if (!TryGetPatientId(out var patientId))
+            {
+                return Forbid();
+            }
+
+            await _service.Cancel(
+                id,
+                patientId);
 
             return NoContent();
         }
@@ -134,6 +145,17 @@ namespace Dsw2026Tpi.Api.Controllers
                     date);
 
             return Ok(appointments);
+        }
+
+        private bool TryGetPatientId(
+            out Guid patientId)
+        {
+            var patientIdClaim =
+                User.FindFirst("patientId")?.Value;
+
+            return Guid.TryParse(
+                patientIdClaim,
+                out patientId);
         }
     }
 }

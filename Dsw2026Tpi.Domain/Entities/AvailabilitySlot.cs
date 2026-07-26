@@ -61,7 +61,7 @@ namespace Dsw2026Tpi.Domain.Entities
             Deleted = true;
         }
 
-      
+
         public void MarkAsBooked()
         {
             if (Status != AvailabilityStatuses.Available)

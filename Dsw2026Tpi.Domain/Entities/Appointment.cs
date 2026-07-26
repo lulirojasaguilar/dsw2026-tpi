@@ -12,7 +12,7 @@ namespace Dsw2026Tpi.Domain.Entities
 
         public string Reason { get; private set; } = string.Empty;
 
-        public string Status { get; private set; }  = string.Empty;
+        public string Status { get; private set; } = string.Empty;
 
         public DateTime? CancelledAt { get; private set; }
 
