@@ -10,9 +10,11 @@ namespace Dsw2026Tpi.Domain.Entities
 
         public Guid PatientId { get; private set; }
 
-        public string Reason { get; private set; }
+        public string Reason { get; private set; } = string.Empty;
 
-        public string Status { get; private set; }
+        public string Status { get; private set; }  = string.Empty;
+
+        public DateTime? CancelledAt { get; private set; }
 
         protected Appointment()
         {
@@ -52,7 +54,9 @@ namespace Dsw2026Tpi.Domain.Entities
                     nameof(reason));
             }
 
-            if (reason.Trim().Length < 5)
+            var normalizedReason = reason.Trim();
+
+            if (normalizedReason.Length < 5)
             {
                 throw new ArgumentException(
                     "Reason debe tener al menos 5 caracteres.",
@@ -62,7 +66,7 @@ namespace Dsw2026Tpi.Domain.Entities
             DoctorId = doctorId;
             AvailabilityId = availabilityId;
             PatientId = patientId;
-            Reason = reason.Trim();
+            Reason = normalizedReason;
             Status = AppointmentStatuses.Booked;
         }
 
@@ -76,6 +80,7 @@ namespace Dsw2026Tpi.Domain.Entities
             }
 
             Status = AppointmentStatuses.Cancelled;
+            CancelledAt = DateTime.UtcNow;
         }
     }
 }

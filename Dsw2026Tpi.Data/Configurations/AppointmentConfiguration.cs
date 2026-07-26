@@ -35,6 +35,9 @@ namespace Dsw2026Tpi.Data.Configurations
                 .HasMaxLength(20)
                 .IsRequired();
 
+            builder.Property(x => x.CancelledAt)
+                .IsRequired(false);
+
             builder.HasOne<Doctor>()
                 .WithMany()
                 .HasForeignKey(x => x.DoctorId)
