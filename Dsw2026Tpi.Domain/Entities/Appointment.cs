@@ -63,6 +63,13 @@ namespace Dsw2026Tpi.Domain.Entities
                     nameof(reason));
             }
 
+            if (normalizedReason.Length > 500)
+            {
+                throw new ArgumentException(
+                    "Reason no puede superar los 500 caracteres.",
+                    nameof(reason));
+            }
+
             DoctorId = doctorId;
             AvailabilityId = availabilityId;
             PatientId = patientId;

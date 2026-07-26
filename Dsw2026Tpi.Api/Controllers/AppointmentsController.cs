@@ -2,7 +2,6 @@
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Identity;
 using Dsw2026Tpi.Domain.Entities;
-using Dsw2026Tpi.Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,16 +20,20 @@ namespace Dsw2026Tpi.Api.Controllers
         [HttpPost]
         [Authorize(Policy = Policies.PatientPolicy)]
         [ProducesResponseType(
-    typeof(AppointmentModel.Response),
-    StatusCodes.Status201Created)]
+            typeof(AppointmentModel.Response),
+            StatusCodes.Status201Created)]
         [ProducesResponseType(
-    StatusCodes.Status400BadRequest)]
+            StatusCodes.Status400BadRequest)]
         [ProducesResponseType(
-    StatusCodes.Status404NotFound)]
+            StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(
-    StatusCodes.Status409Conflict)]
+            StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(
+            StatusCodes.Status404NotFound)]
+        [ProducesResponseType(
+            StatusCodes.Status409Conflict)]
         public async Task<ActionResult<AppointmentModel.Response>>
-    Create(
+            Create(
         [FromBody] AppointmentModel.Request request)
         {
             var appointment =
@@ -49,11 +52,15 @@ namespace Dsw2026Tpi.Api.Controllers
         [ProducesResponseType(
             StatusCodes.Status400BadRequest)]
         [ProducesResponseType(
+            StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(
+            StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(
             StatusCodes.Status404NotFound)]
         public async Task<
             ActionResult<
                 IReadOnlyCollection<AppointmentModel.Response>>>
-            GetByPatient()  
+            GetByPatient()
         {
             if (!TryGetPatientId(out var patientId))
             {
@@ -72,6 +79,10 @@ namespace Dsw2026Tpi.Api.Controllers
             StatusCodes.Status204NoContent)]
         [ProducesResponseType(
             StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(
+            StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(
+            StatusCodes.Status403Forbidden)]
         [ProducesResponseType(
             StatusCodes.Status404NotFound)]
         [ProducesResponseType(
@@ -98,6 +109,10 @@ namespace Dsw2026Tpi.Api.Controllers
             StatusCodes.Status200OK)]
         [ProducesResponseType(
             StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(
+            StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(
+            StatusCodes.Status403Forbidden)]
         public async Task<
             ActionResult<
                 Pagination<AppointmentModel.Response>>>
@@ -122,6 +137,10 @@ namespace Dsw2026Tpi.Api.Controllers
             StatusCodes.Status200OK)]
         [ProducesResponseType(
             StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(
+            StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(
+            StatusCodes.Status403Forbidden)]
         [ProducesResponseType(
             StatusCodes.Status404NotFound)]
         public async Task<
