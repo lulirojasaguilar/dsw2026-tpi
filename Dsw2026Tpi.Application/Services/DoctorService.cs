@@ -60,7 +60,7 @@ public class DoctorService : IDoctorService
 
         var doctors = await _persistence.Paginate<Doctor, string>(
             pageSize, pageIndex,
-            d => !d.Deleted && (string.IsNullOrWhiteSpace(normalizedName) || d.Name.Contains(normalizedName)) && 
+            d => !d.Deleted && (string.IsNullOrWhiteSpace(normalizedName) || d.Name.Contains(normalizedName)) &&
             (!specialtyId.HasValue ||
             d.SpecialityId == specialtyId.Value),
             d => d.Name,
@@ -84,6 +84,21 @@ public class DoctorService : IDoctorService
 
         var normalizedLicenseNumber = request.LicenseNumber.Trim();
 
+        var existingDoctor = await _persistence.First<Doctor>(
+                doctor =>
+                          !doctor.Deleted &&
+                           doctor.LicenseNumber == normalizedLicenseNumber);
+
+        if (existingDoctor is not null)
+        {
+            throw new BusinessRuleException(
+                "Ya existe un médico con esa matrícula.",
+                "DUPLICATE_LICENSE_NUMBER")
+                .WithDetail(
+                    "licenseNumber",
+                    "La matrícula ya se encuentra registrada.");
+        }
+
         var doctor = new Doctor(
             normalizedName,
             normalizedLicenseNumber,
@@ -93,11 +108,21 @@ public class DoctorService : IDoctorService
 
         await _persistence.SaveChangesAsync();
 
-        return new DoctorModel.Response(createdDoctor.Id, createdDoctor.Name, createdDoctor.LicenseNumber, new DoctorModel.SpecialityDto( speciality.Id, speciality.Name));
+        return new DoctorModel.Response(createdDoctor.Id, createdDoctor.Name, createdDoctor.LicenseNumber, new DoctorModel.SpecialityDto(speciality.Id, speciality.Name));
     }
     public async Task<DoctorModel.Response> Update(Guid id, DoctorModel.Request request)
     {
         ValidateRequest(request);
+
+        if (id == Guid.Empty)
+        {
+            throw new ValidationException(
+                "El identificador del médico es obligatorio.",
+                ErrorCodes.VALIDATION_ERROR)
+                .WithDetail(
+                    "id",
+                    "Debe indicar un identificador válido.");
+        }
 
         var doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality));
 
@@ -117,6 +142,22 @@ public class DoctorService : IDoctorService
 
         var normalizedLicenseNumber = request.LicenseNumber.Trim();
 
+        var existingDoctor = await _persistence.First<Doctor>(
+            otherDoctor =>
+                             otherDoctor.Id != id &&
+                            !otherDoctor.Deleted &&
+                             otherDoctor.LicenseNumber == normalizedLicenseNumber);
+
+        if (existingDoctor is not null)
+        {
+            throw new BusinessRuleException(
+                "Ya existe otro médico con esa matrícula.",
+                "DUPLICATE_LICENSE_NUMBER")
+                .WithDetail(
+                    "licenseNumber",
+                    "La matrícula ya se encuentra registrada.");
+        }
+
         doctor.Update(
             normalizedName,
             normalizedLicenseNumber,
@@ -126,11 +167,22 @@ public class DoctorService : IDoctorService
 
         await _persistence.SaveChangesAsync();
 
-        return new DoctorModel.Response(updatedDoctor.Id, updatedDoctor.Name, updatedDoctor.LicenseNumber, new DoctorModel.SpecialityDto(speciality.Id,  speciality.Name));
+        return new DoctorModel.Response(updatedDoctor.Id, updatedDoctor.Name, updatedDoctor.LicenseNumber, new DoctorModel.SpecialityDto(speciality.Id, speciality.Name));
     }
 
     public async Task Delete(Guid id)
     {
+
+        if (id == Guid.Empty)
+        {
+            throw new ValidationException(
+                "El identificador del médico es obligatorio.",
+                ErrorCodes.VALIDATION_ERROR)
+                .WithDetail(
+                    "id",
+                    "Debe indicar un identificador válido.");
+        }
+
         var doctor = await _persistence.GetById<Doctor>(id);
 
         if (doctor is null || doctor.Deleted)
@@ -148,6 +200,17 @@ public class DoctorService : IDoctorService
     public async Task<IReadOnlyCollection<DoctorModel.AvailabilityResponse>>
         GetAvailabilities(Guid doctorId)
     {
+
+        if (doctorId == Guid.Empty)
+        {
+            throw new ValidationException(
+                "El identificador del médico es obligatorio.",
+                ErrorCodes.VALIDATION_ERROR)
+                .WithDetail(
+                    "doctorId",
+                    "Debe indicar un identificador válido.");
+        }
+
         var doctor = await _persistence.GetById<Doctor>(doctorId);
 
         if (doctor is null || doctor.Deleted)
