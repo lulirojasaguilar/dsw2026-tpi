@@ -105,7 +105,7 @@ public class AuthenticationService : IAuthenticationService
     public async Task<LoginPatientModel.Response> LoginPatient(
         LoginPatientModel.Request request)
     {
-        
+
         var validationErrors = new List<(string Field, string Issue)>();
 
         if (!request.Email.IsEmailValid())
@@ -137,7 +137,7 @@ public class AuthenticationService : IAuthenticationService
                 .WithDetail(validationErrors);
         }
 
-        
+
         var patient = await _persistence.First<Patient>(
             p => p.Dni == request.Dni && !p.Deleted);
 
@@ -145,7 +145,7 @@ public class AuthenticationService : IAuthenticationService
 
         if (patient is null)
         {
-            
+
             user = new ApplicationUser
             {
                 UserName = request.Email,
@@ -173,7 +173,7 @@ public class AuthenticationService : IAuthenticationService
                     );
             }
 
-            
+
             if (!await _roleManager.RoleExistsAsync(Roles.Patient))
             {
                 await _roleManager.CreateAsync(
@@ -181,7 +181,7 @@ public class AuthenticationService : IAuthenticationService
                 );
             }
 
-            
+
             var addRoleResult = await _userManager.AddToRoleAsync(
                 user,
                 Roles.Patient
@@ -203,7 +203,7 @@ public class AuthenticationService : IAuthenticationService
                     );
             }
 
-            
+
             patient = new Patient(
                 request.Dni,
                 request.Email,
@@ -224,7 +224,7 @@ public class AuthenticationService : IAuthenticationService
         }
         else
         {
-            
+
             if (!string.Equals(
                     patient.Email,
                     request.Email,
@@ -248,44 +248,20 @@ public class AuthenticationService : IAuthenticationService
             );
         }
 
-       
+
         var role = (await _userManager.GetRolesAsync(user))
             .FirstOrDefault() ?? Roles.Patient;
 
         var token = _jwtService.GenerateToken(
             user.UserName!,
-            role
+            role,
+            patient.Id,
+            patient.Dni
         );
 
         return new LoginPatientModel.Response(
             token,
             role.ToUpperInvariant()
         );
-    }
-
-    public async Task<RegisterModel.Response> Register(RegisterModel.Request request)
-    {
-        if (!request.Email.IsEmailValid()) throw new ValidationException(ErrorCodes.REGISTER_USER_INVALID,
-            nameof(ErrorCodes.REGISTER_USER_INVALID));
-
-        var user = new ApplicationUser
-        {
-            UserName = request.Email,
-            Email = request.Email,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        var result = await _userManager.CreateAsync(user, request.Password);
-
-        if (!result.Succeeded) throw new ConflictException(nameof(ErrorCodes.REGISTER_USER_CONFLICT),
-            ErrorCodes.REGISTER_USER_CONFLICT)
-                .WithDetail(result.Errors.Select(e => (e.Code, e.Description)));
-       
-        _ = await _userManager.AddToRoleAsync(user, Roles.Administrator);
-
-        _logger.LogInformation("Usuario registrado: {Email}", request.Email);
-
-        return new RegisterModel.Response(request.Email);
     }
 }

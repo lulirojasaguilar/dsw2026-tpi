@@ -1,4 +1,5 @@
 ﻿using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Constants;
 
 
@@ -61,12 +62,14 @@ namespace Dsw2026Tpi.Domain.Entities
             Deleted = true;
         }
 
-      
+
         public void MarkAsBooked()
         {
             if (Status != AvailabilityStatuses.Available)
             {
-                throw new BusinessRuleException("El turno no está disponible para reservar.", "APPOINTMENT_CONFLICT");
+                throw new BusinessRuleException(
+                    "El turno no está disponible para reservar.",
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
             Status = AvailabilityStatuses.Booked;
         }
@@ -75,7 +78,9 @@ namespace Dsw2026Tpi.Domain.Entities
         {
             if (Status != AvailabilityStatuses.Available)
             {
-                throw new BusinessRuleException("Solo se puede bloquear un turno que está disponible.", "APPOINTMENT_CONFLICT");
+                throw new BusinessRuleException(
+                    "Solo se puede bloquear un turno que está disponible.",
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
             Status = AvailabilityStatuses.Blocked;
         }
@@ -86,7 +91,7 @@ namespace Dsw2026Tpi.Domain.Entities
             {
                 throw new BusinessRuleException(
                     "Solo un turno reservado puede volver a estar disponible.",
-                    "APPOINTMENT_CONFLICT");
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
 
             Status = AvailabilityStatuses.Available;

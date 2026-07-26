@@ -55,7 +55,8 @@ namespace Dsw2026Tpi.Data.Configurations
 
             builder.HasIndex(x => x.AvailabilityId)
                 .IsUnique()
-                .HasDatabaseName("UX_Appointment_AvailabilityId");
+                .HasDatabaseName("UX_Appointment_AvailabilityId_Booked")
+                .HasFilter("[Status] = 'BOOKED'");
         }
     }
 }

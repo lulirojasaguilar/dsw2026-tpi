@@ -12,7 +12,7 @@ namespace Dsw2026Tpi.Domain.Entities
 
         public string Reason { get; private set; } = string.Empty;
 
-        public string Status { get; private set; }  = string.Empty;
+        public string Status { get; private set; } = string.Empty;
 
         public DateTime? CancelledAt { get; private set; }
 
@@ -60,6 +60,13 @@ namespace Dsw2026Tpi.Domain.Entities
             {
                 throw new ArgumentException(
                     "Reason debe tener al menos 5 caracteres.",
+                    nameof(reason));
+            }
+
+            if (normalizedReason.Length > 500)
+            {
+                throw new ArgumentException(
+                    "Reason no puede superar los 500 caracteres.",
                     nameof(reason));
             }
 

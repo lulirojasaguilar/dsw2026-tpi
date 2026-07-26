@@ -1,6 +1,7 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Constants;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
@@ -187,7 +188,7 @@ namespace Dsw2026Tpi.Application.Services
 
                 throw new BusinessRuleException(
                     "No se puede sobrescribir el mes porque existen turnos reservados (BOOKED) o bloqueados (BLOCKED) para este período.",
-                    "APPOINTMENT_CONFLICT");
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
 
 

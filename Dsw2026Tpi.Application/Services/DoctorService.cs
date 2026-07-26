@@ -237,13 +237,13 @@ public class DoctorService : IDoctorService
     {
         return dayOfWeek switch
         {
-            0 => "MONDAY",
-            1 => "TUESDAY",
-            2 => "WEDNESDAY",
-            3 => "THURSDAY",
-            4 => "FRIDAY",
-            5 => "SATURDAY",
-            6 => "SUNDAY",
+            0 => "LUNES",
+            1 => "MARTES",
+            2 => "MIÉRCOLES",
+            3 => "JUEVES",
+            4 => "VIERNES",
+            5 => "SÁBADO",
+            6 => "DOMINGO",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(dayOfWeek),
                 dayOfWeek,

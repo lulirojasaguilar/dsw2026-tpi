@@ -8,7 +8,7 @@ namespace Dsw2026Tpi.Domain.Entities
     {
         public Guid DoctorId { get; private set; }
 
-        
+
         public byte Month { get; private set; }
         public short Year { get; private set; }
         public byte DayOfWeek { get; private set; } // 0=Lunes...6=Domingo (convención del equipo)

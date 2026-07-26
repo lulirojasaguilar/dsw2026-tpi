@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Dsw2026Tpi.Api.Controllers;
 
 [Route("api/doctors")]
-[Authorize(Policy = Policies.AdminPolicy)]
+[Authorize]
 public class DoctorController : AppController
 {
     private readonly IDoctorService _service;
@@ -21,7 +21,7 @@ public class DoctorController : AppController
 
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll([FromQuery]int pageSize, [FromQuery]int pageIndex, [FromQuery]string? name = null, [FromQuery] Guid? specialtyId = null)
+    public async Task<IActionResult> GetAll([FromQuery] int pageSize=10, [FromQuery] int pageIndex=0, [FromQuery] string? name = null, [FromQuery] Guid? specialtyId = null)
     {
         var doctors = await _service.GetAll(
             pageSize,
@@ -33,6 +33,7 @@ public class DoctorController : AppController
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminPolicy)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     public async Task<IActionResult> Create([FromBody] DoctorModel.Request request)
     {
@@ -42,6 +43,7 @@ public class DoctorController : AppController
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = Policies.AdminPolicy)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid id, [FromBody] DoctorModel.Request request)
     {
@@ -51,6 +53,7 @@ public class DoctorController : AppController
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = Policies.AdminPolicy)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id)
     {

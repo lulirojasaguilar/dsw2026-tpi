@@ -1,12 +1,13 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Constants;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Dsw2026Tpi.CrossCutting.Resources;
+
 
 namespace Dsw2026Tpi.Application.Services;
 
@@ -71,20 +72,20 @@ public class AppointmentService : IAppointmentService
         {
             throw new BusinessRuleException(
                 "La disponibilidad seleccionada no está disponible.",
-                "APPOINTMENT_CONFLICT");
+                nameof(ErrorCodes.APPOINTMENT_CONFLICT));
         }
 
         var existingAppointment =
             await _persistence.First<Appointment>(
                 appointment =>
-                    appointment.AvailabilityId ==
-                    request.AvailabilityId);
+                    appointment.AvailabilityId == request.AvailabilityId &&
+                    appointment.Status == AppointmentStatuses.Booked);
 
         if (existingAppointment is not null)
         {
             throw new BusinessRuleException(
                 "La disponibilidad seleccionada ya posee un turno.",
-                "APPOINTMENT_CONFLICT");
+                nameof(ErrorCodes.APPOINTMENT_CONFLICT));
         }
 
         var appointment = new Appointment(
@@ -114,7 +115,7 @@ public class AppointmentService : IAppointmentService
 
             throw new BusinessRuleException(
                 "El turno fue reservado por otro paciente.",
-                "APPOINTMENT_CONFLICT");
+                nameof(ErrorCodes.APPOINTMENT_CONFLICT));
         }
 
         _logger.LogInformation(
@@ -127,16 +128,21 @@ public class AppointmentService : IAppointmentService
     }
 
     public async Task<IReadOnlyCollection<AppointmentModel.Response>>
-        GetByPatient(long dni)
+        GetByPatient(Guid patientId)
     {
-        ValidateDni(dni);
+        if (patientId == Guid.Empty)
+        {
+            throw new ValidationException(
+                "El identificador del paciente es obligatorio.",
+                ErrorCodes.VALIDATION_ERROR)
+                .WithDetail(
+                    "patientId",
+                    "Debe indicar un identificador válido.");
+        }
 
-        var patient = await _persistence.First<Patient>(
-            patient =>
-                patient.Dni == dni &&
-                !patient.Deleted);
+        var patient = await _persistence.GetById<Patient>(patientId);
 
-        if (patient is null)
+        if (patient is null || patient.Deleted)
         {
             throw new EntityNotFoundException("Patient");
         }
@@ -198,7 +204,7 @@ public class AppointmentService : IAppointmentService
             .ToList();
     }
 
-    public async Task Cancel(Guid id)
+    public async Task Cancel(Guid id, Guid patientId)
     {
         if (id == Guid.Empty)
         {
@@ -210,12 +216,27 @@ public class AppointmentService : IAppointmentService
                     "Debe indicar un identificador válido.");
         }
 
+        if (patientId == Guid.Empty)
+        {
+            throw new ValidationException(
+                "El identificador del paciente es obligatorio.",
+                ErrorCodes.VALIDATION_ERROR)
+                .WithDetail(
+                    "patientId",
+                    "Debe indicar un identificador válido.");
+        }
+
         var appointment =
             await _persistence.GetById<Appointment>(id);
 
         if (appointment is null)
         {
             throw new EntityNotFoundException("Appointment");
+        }
+
+        if (appointment.PatientId != patientId)
+        {
+            throw new AuthorizationException();
         }
 
         var slot =
@@ -252,7 +273,7 @@ public class AppointmentService : IAppointmentService
 
             throw new BusinessRuleException(
                 "El turno fue modificado por otra operación.",
-                "APPOINTMENT_CONFLICT");
+                nameof(ErrorCodes.APPOINTMENT_CONFLICT));
         }
 
         _logger.LogInformation(
@@ -574,7 +595,7 @@ public class AppointmentService : IAppointmentService
                 "El DNI debe tener entre 7 y 10 dígitos.",
                 ErrorCodes.VALIDATION_ERROR)
                 .WithDetail(
-                    "dni",
+                    "patient.dni",
                     "Debe contener entre 7 y 10 dígitos.");
         }
     }
