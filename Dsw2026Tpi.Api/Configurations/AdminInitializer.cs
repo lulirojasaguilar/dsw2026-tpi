@@ -4,13 +4,13 @@ using Microsoft.AspNetCore.Identity;
 
 namespace Dsw2026Tpi.Api.Configurations
 {
-	public class AdminInitializer
-	{
-		public static async Task InitializeAdminAsync(
-	IServiceProvider serviceProvider,
-	IConfiguration configuration)
-		{
-			using var scope = serviceProvider.CreateScope();
+    public class AdminInitializer
+    {
+        public static async Task InitializeAdminAsync(
+            IServiceProvider serviceProvider,
+            IConfiguration configuration)
+        {
+            using var scope = serviceProvider.CreateScope();
 
 			var userManager =
 				scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -26,11 +26,22 @@ namespace Dsw2026Tpi.Api.Configurations
 				?? throw new InvalidOperationException(
 					"No se configuró Admin:Password.");
 
-			if (!await roleManager.RoleExistsAsync(Roles.Administrator))
-			{
-				await roleManager.CreateAsync(
-					new IdentityRole(Roles.Administrator));
-			}
+            if (!await roleManager.RoleExistsAsync(Roles.Administrator))
+            {
+                var createRoleResult = await roleManager.CreateAsync(
+                          new IdentityRole(Roles.Administrator));
+
+                if (!createRoleResult.Succeeded)
+                {
+                    var errors = string.Join(
+                        "; ",
+                        createRoleResult.Errors.Select(
+                            error => error.Description));
+
+                    throw new InvalidOperationException(
+                        $"No se pudo crear el rol Administrador: {errors}");
+                }
+            }
 
 			var admin = await userManager.FindByEmailAsync(adminEmail);
 
@@ -39,14 +50,15 @@ namespace Dsw2026Tpi.Api.Configurations
 				return;
 			}
 
-			admin = new ApplicationUser
-			{
-				UserName = adminEmail,
-				Email = adminEmail,
-				EmailConfirmed = true,
-				CreatedAt = DateTime.UtcNow,
-				UpdatedAt = DateTime.UtcNow
-			};
+            admin = new ApplicationUser
+            {
+                UserName = adminEmail,
+                Email = adminEmail,
+                EmailConfirmed = true,
+                Deleted = false,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
 
 			var creationResult =
 				await userManager.CreateAsync(admin, adminPassword);

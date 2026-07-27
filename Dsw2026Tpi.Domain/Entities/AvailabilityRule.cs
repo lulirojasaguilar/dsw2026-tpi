@@ -7,19 +7,22 @@ namespace Dsw2026Tpi.Domain.Entities
     public class AvailabilityRule : EntityBase
     {
         public Guid DoctorId { get; private set; }
-
-
         public byte Month { get; private set; }
         public short Year { get; private set; }
         public byte DayOfWeek { get; private set; } // 0=Lunes...6=Domingo (convención del equipo)
-
         public TimeSpan StartTime { get; private set; }
         public TimeSpan EndTime { get; private set; }
         public bool Deleted { get; private set; }
 
         protected AvailabilityRule() { }
 
-        public AvailabilityRule(Guid doctorId, int month, int year, int dayOfWeek, TimeSpan startTime, TimeSpan endTime)
+        public AvailabilityRule(
+          Guid doctorId,  
+          int month, 
+          int year, 
+          int dayOfWeek, 
+          TimeSpan startTime, 
+          TimeSpan endTime)
         {
             if (doctorId == Guid.Empty)
             {

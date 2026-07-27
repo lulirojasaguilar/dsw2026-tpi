@@ -14,28 +14,33 @@ public class JwtService
         _config = config;
     }
 
-    public string GenerateToken(string username, string? role, Guid? patientId = null, long? dni = null)
+    public string GenerateToken(
+      string username, 
+      string? role, 
+      Guid? patientId = null, 
+      long? dni = null)
     {
+       
         var jwtConfig = _config.GetSection("Jwt");
-
-        var keyText = jwtConfig["Key"]
-            ?? throw new ArgumentNullException("Jwt Key");
-
-        var issuer = jwtConfig["Issuer"]
-            ?? throw new ArgumentNullException("Jwt Issuer");
-
-        var audience = jwtConfig["Audience"]
-            ?? throw new ArgumentNullException("Jwt Audience");
-
+      
+        var keyText = jwtConfig["Key"] 
+          ?? throw new ArgumentNullException("Jwt Key");
+      
+        var issuer = jwtConfig["Issuer"] 
+          ?? throw new ArgumentNullException("Jwt Issuer");
+      
+        var audience = jwtConfig["Audience"] 
+          ?? throw new ArgumentNullException("Jwt Audience");
+      
         var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(keyText));
-
-        var credentials = new SigningCredentials(
-            key,
-            SecurityAlgorithms.HmacSha256);
-
+          Encoding.UTF8.GetBytes(keyText));
+      
+        var creds = new SigningCredentials(
+          key, 
+          SecurityAlgorithms.HmacSha256);
+      
         var expiresIn = int.Parse(
-            jwtConfig["ExpiresInMinutes"] ?? "60");
+          jwtConfig["ExpiresInMinutes"] ?? "60");
 
         var claims = new List<Claim>
         {
@@ -65,7 +70,7 @@ public class JwtService
             audience: audience,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(expiresIn),
-            signingCredentials: credentials);
+            signingCredentials: creds);
 
         return new JwtSecurityTokenHandler()
             .WriteToken(token);

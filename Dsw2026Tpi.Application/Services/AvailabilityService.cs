@@ -31,12 +31,14 @@ namespace Dsw2026Tpi.Application.Services
             {
                 throw new ValidationException(
                     "El cuerpo de la solicitud es obligatorio.",
-                    "VALIDATION_ERROR");
+                    nameof(ErrorCodes.VALIDATION_ERROR));
             }
 
             if (request.DoctorId == Guid.Empty)
             {
-                throw new ValidationException("DoctorId es obligatorio.", "VALIDATION_ERROR");
+                throw new ValidationException(
+                    "DoctorId es obligatorio.",
+                    nameof(ErrorCodes.VALIDATION_ERROR));
             }
 
             var now = DateTime.Now;
@@ -101,7 +103,7 @@ namespace Dsw2026Tpi.Application.Services
 
                 throw new BusinessRuleException(
                     "La disponibilidad indicada se superpone o ya fue registrada por otra operación.",
-                    "SCHEDULE_OVERLAP");
+                    nameof(ErrorCodes.SCHEDULE_OVERLAP));
             }
 
             _logger.LogInformation(
@@ -117,14 +119,14 @@ namespace Dsw2026Tpi.Application.Services
             {
                 throw new ValidationException(
                     "El cuerpo de la solicitud es obligatorio.",
-                    "VALIDATION_ERROR");
+                    nameof(ErrorCodes.VALIDATION_ERROR));
             }
 
             if (request.DoctorId == Guid.Empty)
             {
                 throw new ValidationException(
                     "DoctorId es obligatorio.",
-                    "VALIDATION_ERROR");
+                    nameof(ErrorCodes.VALIDATION_ERROR));
             }
 
             var now = DateTime.Now;
@@ -246,7 +248,7 @@ namespace Dsw2026Tpi.Application.Services
 
                 throw new BusinessRuleException(
                     "La disponibilidad indicada se superpone o fue modificada por otra operación.",
-                    "SCHEDULE_OVERLAP");
+                    nameof(ErrorCodes.SCHEDULE_OVERLAP));
             }
 
             _logger.LogInformation(
@@ -274,7 +276,7 @@ namespace Dsw2026Tpi.Application.Services
             {
                 throw new ValidationException(
                     "Debe indicar al menos un día de atención.",
-                    "VALIDATION_ERROR");
+                    nameof(ErrorCodes.VALIDATION_ERROR));
             }
 
             var parsedDays = new List<ParsedDay>();
@@ -285,14 +287,14 @@ namespace Dsw2026Tpi.Application.Services
                 {
                     throw new ValidationException(
                         "Cada elemento de 'days' debe contener datos válidos.",
-                        "VALIDATION_ERROR");
+                        nameof(ErrorCodes.VALIDATION_ERROR));
                 }
 
                 if (string.IsNullOrWhiteSpace(day.Day))
                 {
                     throw new ValidationException(
                         "El campo 'day' es obligatorio en cada elemento de 'days'.",
-                        "VALIDATION_ERROR");
+                        nameof(ErrorCodes.VALIDATION_ERROR));
                 }
 
                 if (string.IsNullOrWhiteSpace(day.StartTime)
@@ -300,7 +302,7 @@ namespace Dsw2026Tpi.Application.Services
                 {
                     throw new ValidationException(
                         "Los campos 'startTime' y 'endTime' son obligatorios en cada elemento de 'days'.",
-                        "VALIDATION_ERROR");
+                        nameof(ErrorCodes.VALIDATION_ERROR));
                 }
 
                 var dayIndex = AvailabilityGenerator.ParseDay(day.Day);
@@ -362,7 +364,7 @@ namespace Dsw2026Tpi.Application.Services
                     {
                         throw new BusinessRuleException(
                             $"El horario indicado para {day.DayName} se solapa con otra disponibilidad existente.",
-                            "SCHEDULE_OVERLAP");
+                            nameof(ErrorCodes.SCHEDULE_OVERLAP));
                     }
                 }
             }
@@ -393,7 +395,7 @@ namespace Dsw2026Tpi.Application.Services
                     {
                         throw new BusinessRuleException(
                             $"El request contiene horarios duplicados o solapados para el día {firstDay.DayName}.",
-                            "SCHEDULE_OVERLAP");
+                            nameof(ErrorCodes.SCHEDULE_OVERLAP));
                     }
                 }
             }
@@ -456,7 +458,7 @@ namespace Dsw2026Tpi.Application.Services
             {
                 throw new ValidationException(
                     "El valor del día de la semana no es válido.",
-                    "VALIDATION_ERROR");
+                    nameof(ErrorCodes.VALIDATION_ERROR));
             }
 
             return DayNames[index];

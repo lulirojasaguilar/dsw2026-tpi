@@ -68,7 +68,7 @@ namespace Dsw2026Tpi.Domain.Entities
             if (Status != AvailabilityStatuses.Available)
             {
                 throw new BusinessRuleException(
-                    "El turno no está disponible para reservar.",
+                    "El turno no está disponible para reservar.", 
                     nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
             Status = AvailabilityStatuses.Booked;
@@ -79,7 +79,7 @@ namespace Dsw2026Tpi.Domain.Entities
             if (Status != AvailabilityStatuses.Available)
             {
                 throw new BusinessRuleException(
-                    "Solo se puede bloquear un turno que está disponible.",
+                    "Solo se puede bloquear un turno que está disponible.", 
                     nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
             Status = AvailabilityStatuses.Blocked;
@@ -103,7 +103,7 @@ namespace Dsw2026Tpi.Domain.Entities
             {
                 throw new BusinessRuleException(
                     "Solo se puede desbloquear un turno bloqueado.",
-                    "INVALID_SLOT_STATUS");
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
 
             Status = AvailabilityStatuses.Available;

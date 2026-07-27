@@ -68,11 +68,11 @@ public class AuthenticationService : IAuthenticationService
 
         var user = await _userManager.FindByEmailAsync(request.Email);
 
-        if (user is null)
+        if (user is null || user.Deleted)
         {
             _logger.LogInformation(
-                "Intento de login de administrador fallido para: {Email}. Usuario inexistente",
-                request.Email);
+                "Intento de login de administrador fallido para. Usuario inexistente o eliminado"
+                );
 
             throw new AuthenticationException();
         }
@@ -82,23 +82,41 @@ public class AuthenticationService : IAuthenticationService
         if (!result)
         {
             _logger.LogInformation(
-                "Intento de login de administrador fallido para: {Email}. Contraseña incorrecta",
-                request.Email);
+                "Intento de login de administrador fallido para. Contraseña incorrecta"
+                );
 
             throw new AuthenticationException();
         }
 
-        var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault() ?? Roles.Administrator;
+        var roles = await _userManager.GetRolesAsync(user);
 
-        var token = _jwtService.GenerateToken(user.UserName!, role);
+        var adminRole = roles.FirstOrDefault(role =>
+            string.Equals(
+                role,
+                Roles.Administrator,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (adminRole is null)
+        {
+            _logger.LogWarning(
+                "Intento de acceso administrativo rechazado porque el usuario no posee el rol requerido.");
+
+            throw new AuthenticationException();
+        }
+
+        var username = user.UserName
+            ?? user.Email
+            ?? throw new AuthenticationException();
+
+        var token = _jwtService.GenerateToken(user.UserName!, adminRole);
 
         _logger.LogInformation(
-            "Login de administrador exitoso para: {Email}",
-            request.Email);
+            "Login de administrador realizado correctamente."
+            );
 
         return new LoginAdminModel.Response(
             token,
-            role.ToUpperInvariant()
+            adminRole.ToUpperInvariant()
         );
     }
 
@@ -160,8 +178,8 @@ public class AuthenticationService : IAuthenticationService
             if (!createUserResult.Succeeded)
             {
                 _logger.LogInformation(
-                    "Autoregistro de paciente fallido para: {Email}",
-                    request.Email);
+                    "Autoregistro de paciente fallido."
+                    );
 
                 throw new ConflictException(
                     nameof(ErrorCodes.REGISTER_USER_CONFLICT),
@@ -176,9 +194,23 @@ public class AuthenticationService : IAuthenticationService
 
             if (!await _roleManager.RoleExistsAsync(Roles.Patient))
             {
-                await _roleManager.CreateAsync(
-                    new IdentityRole(Roles.Patient)
-                );
+                var createRoleResult = await _roleManager.CreateAsync(
+                          new IdentityRole(Roles.Patient));
+
+                if (!createRoleResult.Succeeded)
+                {
+                    _logger.LogError(
+                        "No se pudo crear el rol Paciente.");
+
+                    throw new ConflictException(
+                        nameof(ErrorCodes.REGISTER_USER_CONFLICT),
+                        ErrorCodes.REGISTER_USER_CONFLICT)
+                        .WithDetail(
+                            createRoleResult.Errors.Select(
+                                error => (error.Code, error.Description)
+                            )
+                        );
+                }
             }
 
 
@@ -190,8 +222,8 @@ public class AuthenticationService : IAuthenticationService
             if (!addRoleResult.Succeeded)
             {
                 _logger.LogInformation(
-                    "No se pudo asignar el rol Paciente a: {Email}",
-                    request.Email);
+                    "No se pudo asignar el rol Paciente al usuario"
+                    );
 
                 throw new ConflictException(
                     nameof(ErrorCodes.REGISTER_USER_CONFLICT),
@@ -218,8 +250,7 @@ public class AuthenticationService : IAuthenticationService
             await _persistence.SaveChangesAsync();
 
             _logger.LogInformation(
-                "Paciente autoregistrado correctamente. DNI: {Dni}",
-                request.Dni
+                "Paciente autoregistrado correctamente."
             );
         }
         else
@@ -231,37 +262,57 @@ public class AuthenticationService : IAuthenticationService
                     StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogInformation(
-                    "Login de paciente fallido. El email no coincide con el DNI: {Dni}",
-                    request.Dni
+                    "Login de paciente fallido. El email no coincide con el DNI"
                 );
 
                 throw new AuthenticationException();
             }
 
             user = await _userManager.FindByIdAsync(
-                patient.ApplicationUserId
-            ) ?? throw new AuthenticationException();
+                patient.ApplicationUserId)
+                ?? throw new AuthenticationException();
+
+            if (user.Deleted)
+            {
+                _logger.LogInformation(
+                    "Login de paciente fallido. Usuario eliminado.");
+
+                throw new AuthenticationException();
+            }
 
             _logger.LogInformation(
-                "Login de paciente existente exitoso. DNI: {Dni}",
-                request.Dni
-            );
+                "Login de paciente existente realizado correctamente.");
         }
 
+        var roles = await _userManager.GetRolesAsync(user);
 
-        var role = (await _userManager.GetRolesAsync(user))
-            .FirstOrDefault() ?? Roles.Patient;
+        var patientRole = roles.FirstOrDefault(role =>
+            string.Equals(
+        role,
+        Roles.Patient,
+        StringComparison.OrdinalIgnoreCase));
+
+        if (patientRole is null)
+        {
+            _logger.LogWarning(
+                "Login de paciente rechazado porque el usuario no posee el rol requerido.");
+
+            throw new AuthenticationException();
+        }
+
+        var username = user.UserName
+            ?? user.Email
+            ?? throw new AuthenticationException();
 
         var token = _jwtService.GenerateToken(
-            user.UserName!,
-            role,
+            username,
+            patientRole,
             patient.Id,
-            patient.Dni
-        );
+            patient.Dni);
 
         return new LoginPatientModel.Response(
             token,
-            role.ToUpperInvariant()
+            patientRole.ToUpperInvariant()
         );
     }
 }
