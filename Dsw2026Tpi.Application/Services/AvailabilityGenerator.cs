@@ -1,6 +1,7 @@
-﻿using Dsw2026Tpi.CrossCutting.Exceptions;
+﻿using System.Globalization;
+using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Entities;
-using System.Globalization;
 
 
 namespace Dsw2026Tpi.Application.Services
@@ -11,28 +12,28 @@ namespace Dsw2026Tpi.Application.Services
         private static readonly Dictionary<string, int> DayValues =
              new(StringComparer.OrdinalIgnoreCase)
              {
-                ["LUNES"] = 0,
-                ["MARTES"] = 1,
-                ["MIERCOLES"] = 2,
-                ["MIÉRCOLES"] = 2,
-                ["JUEVES"] = 3,
-                ["VIERNES"] = 4,
-                ["SABADO"] = 5,
-                ["SÁBADO"] = 5,
-                ["DOMINGO"] = 6,
+                 ["LUNES"] = 0,
+                 ["MARTES"] = 1,
+                 ["MIERCOLES"] = 2,
+                 ["MIÉRCOLES"] = 2,
+                 ["JUEVES"] = 3,
+                 ["VIERNES"] = 4,
+                 ["SABADO"] = 5,
+                 ["SÁBADO"] = 5,
+                 ["DOMINGO"] = 6,
 
-                // Compatibilidad 
-                ["MONDAY"] = 0,
-                ["TUESDAY"] = 1,
-                ["WEDNESDAY"] = 2,
-                ["THURSDAY"] = 3,
-                ["FRIDAY"] = 4,
-                ["SATURDAY"] = 5,
-                ["SUNDAY"] = 6
-              };
+                 // Compatibilidad 
+                 ["MONDAY"] = 0,
+                 ["TUESDAY"] = 1,
+                 ["WEDNESDAY"] = 2,
+                 ["THURSDAY"] = 3,
+                 ["FRIDAY"] = 4,
+                 ["SATURDAY"] = 5,
+                 ["SUNDAY"] = 6
+             };
 
 
-        public static int ParseDay(string day)
+        public static int ParseDay(string? day)
         {
             var normalized = day?.Trim();
 
@@ -40,21 +41,24 @@ namespace Dsw2026Tpi.Application.Services
                 !DayValues.TryGetValue(normalized, out var dayValue))
             {
                 throw new ValidationException(
-                    $"El día '{day}' no es válido. Use LUNES, MARTES, MIÉRCOLES, JUEVES, VIERNES, SÁBADO o DOMINGO.",
-                    "VALIDATION_ERROR");
+                    $"El día '{day}' no es válido.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "day",
+                        "Use MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY o SUNDAY.");
             }
 
             return dayValue;
         }
 
-       
+
         public static int NormalizeNetDayOfWeek(DayOfWeek nativeDayOfWeek)
         {
             return ((int)nativeDayOfWeek + 6) % 7;
         }
 
 
-        public static TimeSpan ParseTime(string value, string fieldName)
+        public static TimeSpan ParseTime(string? value, string fieldName)
         {
             if (string.IsNullOrWhiteSpace(value) ||
                 !TimeSpan.TryParseExact(
@@ -64,8 +68,11 @@ namespace Dsw2026Tpi.Application.Services
                     out var result))
             {
                 throw new ValidationException(
-                    $"{fieldName} debe tener formato HH:mm.",
-                    "VALIDATION_ERROR");
+                    "El horario indicado no es válido.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        fieldName,
+                        "Debe tener formato HH:mm, por ejemplo 09:30.");
             }
 
             return result;
@@ -76,23 +83,38 @@ namespace Dsw2026Tpi.Application.Services
         {
             if (startTime >= endTime)
             {
-                throw new ValidationException("StartTime debe ser estrictamente menor a EndTime.", "VALIDATION_ERROR");
+                throw new ValidationException(
+                "El rango horario no es válido.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail(
+                    "startTime",
+                    "La hora de inicio debe ser menor que la hora de finalización.");
             }
 
             var duration = endTime - startTime;
 
             if (duration < TimeSpan.FromMinutes(30))
             {
-                throw new ValidationException("El rango debe permitir al menos un bloque de 30 minutos.", "VALIDATION_ERROR");
+                throw new ValidationException(
+                "El rango horario no es válido.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail(
+                    "endTime",
+                    "El rango debe permitir al menos un bloque de 30 minutos.");
             }
 
             if (duration.TotalMinutes % 30 != 0)
             {
-                throw new ValidationException("El rango debe ser múltiplo exacto de 30 minutos (ej. 09:00-10:15 no es válido).", "VALIDATION_ERROR");
+                throw new ValidationException(
+                      "El rango horario no es válido.",
+                      nameof(ErrorCodes.VALIDATION_ERROR))
+                      .WithDetail(
+                          "endTime",
+                          "La duración del rango debe ser múltiplo exacto de 30 minutos.");
             }
         }
 
-        
+
         public static HashSet<DateOnly> GetHolidaysForYear(int year)
         {
             if (year != 2027)
@@ -143,7 +165,7 @@ namespace Dsw2026Tpi.Application.Services
              };
         }
 
-       
+
         public List<AvailabilitySlot> GenerateSlotsForMonth(
             Guid ruleId,
             Guid doctorId,
@@ -158,36 +180,52 @@ namespace Dsw2026Tpi.Application.Services
             if (ruleId == Guid.Empty)
             {
                 throw new ValidationException(
-                    "AvailabilityRuleId es obligatorio.",
-                    "VALIDATION_ERROR");
+                    "Los datos de la regla de disponibilidad no son válidos.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "availabilityRuleId",
+                        "El identificador de la regla es obligatorio.");
             }
 
             if (doctorId == Guid.Empty)
             {
                 throw new ValidationException(
-                    "DoctorId es obligatorio.",
-                    "VALIDATION_ERROR");
+                    "Los datos de disponibilidad no son válidos.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "doctorId",
+                        "El identificador del médico es obligatorio.");
             }
 
             if (month is < 1 or > 12)
             {
                 throw new ValidationException(
-                    "Month debe estar entre 1 y 12.",
-                    "VALIDATION_ERROR");
+                    "Los datos de disponibilidad no son válidos.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "month",
+                        "El mes debe estar entre 1 y 12.");
             }
 
             if (year is < 1 or > 9999)
             {
                 throw new ValidationException(
-                    "Year debe estar entre 1 y 9999.",
-                    "VALIDATION_ERROR");
+                    "Los datos de disponibilidad no son válidos.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "year",
+                        "El año debe estar entre 1 y 9999.");
             }
 
             if (targetDayOfWeek is < 0 or > 6)
             {
                 throw new ValidationException(
-                    "El día de la semana debe estar entre 0 y 6.",
-                    "VALIDATION_ERROR");
+                    "Los datos de disponibilidad no son válidos.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "day",
+                        "El día de la semana debe estar entre 0 y 6.");
+
             }
 
             ValidateRange(startTime, endTime);
@@ -198,8 +236,11 @@ namespace Dsw2026Tpi.Application.Services
             if (requestedMonth < currentMonth)
             {
                 throw new ValidationException(
-                    "No se puede generar disponibilidad para un mes pasado.",
-                    "VALIDATION_ERROR");
+                "No se puede generar disponibilidad para un mes pasado.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail(
+                    "month",
+                    "El mes y el año deben corresponder al mes actual o a uno futuro.");
             }
 
             var slots = new List<AvailabilitySlot>();
@@ -223,7 +264,7 @@ namespace Dsw2026Tpi.Application.Services
                     continue;
                 }
 
-                
+
                 var currentSlotStart = startTime;
 
                 while (currentSlotStart.Add(TimeSpan.FromMinutes(30)) <= endTime)

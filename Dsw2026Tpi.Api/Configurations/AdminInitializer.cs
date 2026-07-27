@@ -7,8 +7,8 @@ namespace Dsw2026Tpi.Api.Configurations
     public class AdminInitializer
     {
         public static async Task InitializeAdminAsync(
-    IServiceProvider serviceProvider,
-    IConfiguration configuration)
+            IServiceProvider serviceProvider,
+            IConfiguration configuration)
         {
             using var scope = serviceProvider.CreateScope();
 
@@ -28,8 +28,19 @@ namespace Dsw2026Tpi.Api.Configurations
 
             if (!await roleManager.RoleExistsAsync(Roles.Administrator))
             {
-                await roleManager.CreateAsync(
-                    new IdentityRole(Roles.Administrator));
+                var createRoleResult = await roleManager.CreateAsync(
+                          new IdentityRole(Roles.Administrator));
+
+                if (!createRoleResult.Succeeded)
+                {
+                    var errors = string.Join(
+                        "; ",
+                        createRoleResult.Errors.Select(
+                            error => error.Description));
+
+                    throw new InvalidOperationException(
+                        $"No se pudo crear el rol Administrador: {errors}");
+                }
             }
 
             var admin = await userManager.FindByEmailAsync(adminEmail);
@@ -44,6 +55,7 @@ namespace Dsw2026Tpi.Api.Configurations
                 UserName = adminEmail,
                 Email = adminEmail,
                 EmailConfirmed = true,
+                Deleted = false,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
