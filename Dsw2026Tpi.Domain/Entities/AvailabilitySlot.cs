@@ -1,4 +1,5 @@
 ﻿using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Constants;
 
 
@@ -11,7 +12,7 @@ namespace Dsw2026Tpi.Domain.Entities
         public DateOnly SlotDate { get; private set; }
         public TimeSpan StartTime { get; private set; }
         public TimeSpan EndTime { get; private set; }
-        public string Status { get; private set; }
+        public string Status { get; private set; } = null!;
         public bool Deleted { get; private set; }
 
         protected AvailabilitySlot() { }
@@ -65,7 +66,9 @@ namespace Dsw2026Tpi.Domain.Entities
         {
             if (Status != AvailabilityStatuses.Available)
             {
-                throw new BusinessRuleException("El turno no está disponible para reservar.", "APPOINTMENT_CONFLICT");
+                throw new BusinessRuleException(
+                    "El turno no está disponible para reservar.", 
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
             Status = AvailabilityStatuses.Booked;
         }
@@ -74,7 +77,9 @@ namespace Dsw2026Tpi.Domain.Entities
         {
             if (Status != AvailabilityStatuses.Available)
             {
-                throw new BusinessRuleException("Solo se puede bloquear un turno que está disponible.", "APPOINTMENT_CONFLICT");
+                throw new BusinessRuleException(
+                    "Solo se puede bloquear un turno que está disponible.", 
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
             Status = AvailabilityStatuses.Blocked;
         }
@@ -85,7 +90,7 @@ namespace Dsw2026Tpi.Domain.Entities
             {
                 throw new BusinessRuleException(
                     "Solo un turno reservado puede volver a estar disponible.",
-                    "APPOINTMENT_CONFLICT");
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
 
             Status = AvailabilityStatuses.Available;
@@ -97,7 +102,7 @@ namespace Dsw2026Tpi.Domain.Entities
             {
                 throw new BusinessRuleException(
                     "Solo se puede desbloquear un turno bloqueado.",
-                    "INVALID_SLOT_STATUS");
+                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
             }
 
             Status = AvailabilityStatuses.Available;
