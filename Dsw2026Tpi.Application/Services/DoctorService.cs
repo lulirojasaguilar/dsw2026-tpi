@@ -23,7 +23,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "El tamaño de página debe ser mayor que cero.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail("pageSize", "Debe ser mayor que cero.");
         }
 
@@ -31,7 +31,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "El índice de página no puede ser negativo.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail("pageIndex", "No puede ser negativo.");
         }
 
@@ -42,12 +42,22 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "El filtro por nombre debe tener entre 3 y 100 caracteres.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
         }
 
         if (specialtyId.HasValue)
         {
+            if (specialtyId.Value == Guid.Empty)
+            {
+                throw new ValidationException(
+                    "El identificador de la especialidad no es válido.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "specialtyId",
+                        "Debe indicar un identificador válido.");
+            }
+
             var speciality =
                 await _persistence.GetById<Speciality>(
                     specialtyId.Value);
@@ -118,7 +128,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "El identificador del médico es obligatorio.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail(
                     "id",
                     "Debe indicar un identificador válido.");
@@ -177,7 +187,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "El identificador del médico es obligatorio.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail(
                     "id",
                     "Debe indicar un identificador válido.");
@@ -205,7 +215,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "El identificador del médico es obligatorio.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail(
                     "doctorId",
                     "Debe indicar un identificador válido.");
@@ -244,11 +254,21 @@ public class DoctorService : IDoctorService
 
     private static void ValidateRequest(DoctorModel.Request request)
     {
+        if (request is null)
+        {
+            throw new ValidationException(
+                "La solicitud es obligatoria.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail(
+                    "request",
+                    "Debe enviar los datos del médico.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             throw new ValidationException(
                 "El nombre es obligatorio.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail("name", "El nombre es obligatorio.");
         }
 
@@ -258,7 +278,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "El nombre debe tener entre 3 y 100 caracteres.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
         }
 
@@ -266,7 +286,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "La matrícula es obligatoria.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail(
                     "licenseNumber",
                     "La matrícula es obligatoria.");
@@ -279,7 +299,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "La matrícula no puede superar los 50 caracteres.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail(
                     "licenseNumber",
                     "No puede superar los 50 caracteres.");
@@ -289,7 +309,7 @@ public class DoctorService : IDoctorService
         {
             throw new ValidationException(
                 "La especialidad es obligatoria.",
-                ErrorCodes.VALIDATION_ERROR)
+                nameof(ErrorCodes.VALIDATION_ERROR))
                 .WithDetail(
                     "specialityId",
                     "Debe indicar una especialidad válida.");
