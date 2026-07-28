@@ -19,12 +19,15 @@ namespace Dsw2026Tpi.Domain.Entities
         protected AvailabilitySlot() { }
 
         public AvailabilitySlot(
-            Guid availabilityRuleId, Guid doctorId, DateOnly slotDate, TimeSpan startTime, TimeSpan endTime, string status)
+         Guid availabilityRuleId,
+         Guid doctorId,
+         DateOnly slotDate,
+         TimeSpan startTime,
+         TimeSpan endTime,
+         string status,
+         Guid? id = null) : base(id)
         {
-            if (!AvailabilityStatuses.All.Contains(status))
-            {
-                throw new ArgumentException($"Status '{status}' inválido. Valores permitidos: AVAILABLE, BOOKED, BLOCKED.");
-            }
+            Validate(availabilityRuleId, doctorId, status, startTime, endTime);
 
             AvailabilityRuleId = availabilityRuleId;
             DoctorId = doctorId;
@@ -40,7 +43,7 @@ namespace Dsw2026Tpi.Domain.Entities
             Deleted = true;
         }
 
-      
+
         public void MarkAsBooked()
         {
             if (Status != AvailabilityStatuses.Available)
@@ -62,6 +65,33 @@ namespace Dsw2026Tpi.Domain.Entities
         public void MarkAsAvailable()
         {
             Status = AvailabilityStatuses.Available;
+        }
+        private static void Validate(
+        Guid availabilityRuleId,
+        Guid doctorId,
+        string status,
+        TimeSpan startTime,
+        TimeSpan endTime)
+        {
+            if (availabilityRuleId == Guid.Empty)
+            {
+                throw new ArgumentException("AvailabilityRuleId no puede ser vacío.", nameof(availabilityRuleId));
+            }
+
+            if (doctorId == Guid.Empty)
+            {
+                throw new ArgumentException("DoctorId no puede ser vacío.", nameof(doctorId));
+            }
+
+            if (!AvailabilityStatuses.All.Contains(status))
+            {
+                throw new ArgumentException($"Status '{status}' inválido. Valores permitidos: AVAILABLE, BOOKED, BLOCKED.");
+            }
+
+            if (endTime <= startTime)
+            {
+                throw new ArgumentException("EndTime debe ser mayor a StartTime.");
+            }
         }
     }
 }

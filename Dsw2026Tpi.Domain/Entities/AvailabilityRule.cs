@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 
 namespace Dsw2026Tpi.Domain.Entities
@@ -8,7 +9,7 @@ namespace Dsw2026Tpi.Domain.Entities
     {
         public Guid DoctorId { get; private set; }
 
-        
+
         public byte Month { get; private set; }
         public short Year { get; private set; }
         public byte DayOfWeek { get; private set; } // 0=Lunes...6=Domingo (convención del equipo)
@@ -19,12 +20,15 @@ namespace Dsw2026Tpi.Domain.Entities
 
         protected AvailabilityRule() { }
 
-        public AvailabilityRule(Guid doctorId, int month, int year, int dayOfWeek, TimeSpan startTime, TimeSpan endTime)
+        public AvailabilityRule(Guid doctorId, int month, int year, int dayOfWeek, TimeSpan startTime, TimeSpan endTime, Guid? id = null) : base(id)
         {
-            if (month is < 1 or > 12)
-                throw new ArgumentOutOfRangeException(nameof(month), "Month debe estar entre 1 y 12.");
-            if (dayOfWeek is < 0 or > 6)
-                throw new ArgumentOutOfRangeException(nameof(dayOfWeek), "DayOfWeek debe estar entre 0 (Lunes) y 6 (Domingo).");
+            Validate(
+                doctorId,
+                month,
+                year,
+                dayOfWeek,
+                startTime,
+                endTime);
 
             DoctorId = doctorId;
             Month = (byte)month;
@@ -38,6 +42,39 @@ namespace Dsw2026Tpi.Domain.Entities
         public void Delete()
         {
             Deleted = true;
+        }
+
+        private static void Validate(
+         Guid doctorId,
+         int month,
+         int year,
+         int dayOfWeek,
+         TimeSpan startTime,
+         TimeSpan endTime)
+        {
+            if (doctorId == Guid.Empty)
+            {
+                throw new ArgumentException("DoctorId no puede ser un Guid vacío.", nameof(doctorId));
+            }
+
+            if (month is < 1 or > 12)
+            {
+                throw new ArgumentOutOfRangeException(nameof(month), "Month debe estar entre 1 y 12.");
+            }
+
+            if (dayOfWeek is < 0 or > 6)
+            {
+                throw new ArgumentOutOfRangeException(nameof(dayOfWeek), "DayOfWeek debe estar entre 0 (Lunes) y 6 (Domingo).");
+            }
+
+            if (endTime <= startTime)
+            {
+                throw new ArgumentException("Endtime debe ser mayor a StartTime");
+
+
+
+
+            }
         }
     }
 }

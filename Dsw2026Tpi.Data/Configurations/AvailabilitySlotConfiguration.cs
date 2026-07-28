@@ -16,25 +16,49 @@ namespace Dsw2026Tpi.Data.Configurations
 
             builder.Property(x => x.AvailabilityRuleId).IsRequired();
             builder.Property(x => x.DoctorId).IsRequired();
-            builder.Property(x => x.StartTime).IsRequired();
-            builder.Property(x => x.EndTime).IsRequired();
-            builder.Property(x => x.Status).IsRequired().HasMaxLength(20);
-            builder.Property(x => x.Deleted).IsRequired();
 
-            builder.Property(s => s.SlotDate)
-                 .HasColumnName("Date")
+
+            builder.Property(x => x.StartTime)
+                 .HasColumnType("time(0)")
                  .IsRequired();
 
-          
+
+            builder.Property(x => x.EndTime)
+                 .HasColumnType("time(0)")
+                 .IsRequired();
+
+
+            builder.Property(x => x.Status)
+                .HasMaxLength(20)
+                .HasDefaultValue("AVAILABLE")
+                .IsRequired();
+            builder.Property(x => x.Deleted)
+                .HasColumnName("deleted")
+                .HasDefaultValue(false)
+                .IsRequired();
+
+            builder.Property(x => x.SlotDate)
+                .HasColumnType("date")
+                .HasColumnName("Date")
+                .IsRequired();
+
+
             builder.HasOne<AvailabilityRule>()
                 .WithMany()
                 .HasForeignKey(x => x.AvailabilityRuleId)
                 .IsRequired()
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
-           
-            builder.HasIndex(s => new { s.DoctorId, s.SlotDate, s.StartTime })
-                .IsUnique();
+
+            builder.HasIndex(x => new
+            {
+                x.DoctorId,
+                x.SlotDate,
+                x.StartTime
+            })
+            .IsUnique()
+            .HasFilter("[deleted] = 0")
+            .HasDatabaseName("UX_AvailabilitySlot_Doctor_Date_StartTime");
         }
     }
 }

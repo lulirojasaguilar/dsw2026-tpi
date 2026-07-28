@@ -18,19 +18,29 @@ namespace Dsw2026Tpi.Data.Configurations
             builder.Property(x => x.Month).IsRequired();
             builder.Property(x => x.Year).IsRequired();
             builder.Property(x => x.DayOfWeek).IsRequired();
-            builder.Property(x => x.StartTime).IsRequired();
-            builder.Property(x => x.EndTime).IsRequired();
-            builder.Property(x => x.Deleted).IsRequired();
 
-            // Corrección 1.18: sin esta FK la base permitía reglas con DoctorId inexistente.
+            builder.Property(x => x.StartTime)
+                .HasColumnType("time(0)")
+                .IsRequired();
+            builder.Property(x => x.EndTime)
+                .HasColumnType("time(0)")
+                .IsRequired();
+            builder.Property(x => x.Deleted)
+                .HasDefaultValue(false)
+
+                .IsRequired();
+
+            
             builder.HasOne<Doctor>()
                 .WithMany()
                 .HasForeignKey(x => x.DoctorId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Corrección 1.21: constraint UNIQUE real en la base, no solo validado en código.
+
             builder.HasIndex(r => new { r.DoctorId, r.Year, r.Month, r.DayOfWeek, r.StartTime, r.EndTime })
-                .IsUnique();
+                .IsUnique()
+                .HasFilter("[Deleted] = 0")
+                .HasDatabaseName("UX_AvailabilityRule_Doctor_Time");
         }
     }
 }
