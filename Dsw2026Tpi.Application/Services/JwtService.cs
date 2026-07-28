@@ -14,7 +14,7 @@ public class JwtService
         _config = config;
     }
 
-    public string GenerateToken(string username, string? role, Guid? patientId = null, long? dni = null)
+    public string GenerateToken(string username, string role, Guid? patientId = null, long? dni = null)
     {
        
         var jwtConfig = _config.GetSection("Jwt");
@@ -29,7 +29,7 @@ public class JwtService
         {
             new Claim(JwtRegisteredClaimNames.Sub, username),
             new Claim(ClaimTypes.Name, username),
-            new Claim(ClaimTypes.Role, role ?? string.Empty)
+            new Claim(ClaimTypes.Role, role)
         };
 
         if (patientId.HasValue)
@@ -52,7 +52,7 @@ public class JwtService
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.Now.AddMinutes(expiresIn),
+            expires: DateTime.UtcNow.AddMinutes(expiresIn),
             signingCredentials: creds
             );
 
