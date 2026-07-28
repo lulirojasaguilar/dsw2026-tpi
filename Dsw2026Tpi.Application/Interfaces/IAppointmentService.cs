@@ -9,7 +9,7 @@ namespace Dsw2026Tpi.Application.Interfaces
             AppointmentModel.Request request);
 
         Task<IReadOnlyCollection<AppointmentModel.Response>> GetByPatient(
-            Guid patientId);
+            long dni);
 
         Task Cancel(
             Guid id,

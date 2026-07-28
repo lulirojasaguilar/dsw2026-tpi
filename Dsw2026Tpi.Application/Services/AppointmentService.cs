@@ -128,21 +128,16 @@ public class AppointmentService : IAppointmentService
     }
 
     public async Task<IReadOnlyCollection<AppointmentModel.Response>>
-        GetByPatient(Guid patientId)
+     GetByPatient(long dni)
     {
-        if (patientId == Guid.Empty)
-        {
-            throw new ValidationException(
-                "El identificador del paciente es obligatorio.",
-                ErrorCodes.VALIDATION_ERROR)
-                .WithDetail(
-                    "patientId",
-                    "Debe indicar un identificador válido.");
-        }
+        ValidateDni(dni);
 
-        var patient = await _persistence.GetById<Patient>(patientId);
+        var patient = await _persistence.First<Patient>(
+            patient =>
+                patient.Dni == dni &&
+                !patient.Deleted);
 
-        if (patient is null || patient.Deleted)
+        if (patient is null)
         {
             throw new EntityNotFoundException("Patient");
         }

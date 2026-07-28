@@ -60,15 +60,11 @@ namespace Dsw2026Tpi.Api.Controllers
         public async Task<
             ActionResult<
                 IReadOnlyCollection<AppointmentModel.Response>>>
-            GetByPatient()
+            GetByPatient(
+                [FromQuery] long dni)
         {
-            if (!TryGetPatientId(out var patientId))
-            {
-                return Forbid();
-            }
-
             var appointments =
-                await _service.GetByPatient(patientId);
+                await _service.GetByPatient(dni);
 
             return Ok(appointments);
         }

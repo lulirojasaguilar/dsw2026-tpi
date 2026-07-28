@@ -9,38 +9,38 @@ namespace Dsw2026Tpi.Application.Services;
 public class JwtService
 {
     private readonly IConfiguration _config;
+
     public JwtService(IConfiguration config)
     {
         _config = config;
     }
 
     public string GenerateToken(
-      string username, 
-      string? role, 
-      Guid? patientId = null, 
-      long? dni = null)
+        string username,
+        string? role,
+        Guid? patientId = null,
+        long? dni = null)
     {
-       
         var jwtConfig = _config.GetSection("Jwt");
-      
-        var keyText = jwtConfig["Key"] 
-          ?? throw new ArgumentNullException("Jwt Key");
-      
-        var issuer = jwtConfig["Issuer"] 
-          ?? throw new ArgumentNullException("Jwt Issuer");
-      
-        var audience = jwtConfig["Audience"] 
-          ?? throw new ArgumentNullException("Jwt Audience");
-      
+
+        var keyText = jwtConfig["Key"]
+            ?? throw new ArgumentNullException("Jwt Key");
+
+        var issuer = jwtConfig["Issuer"]
+            ?? throw new ArgumentNullException("Jwt Issuer");
+
+        var audience = jwtConfig["Audience"]
+            ?? throw new ArgumentNullException("Jwt Audience");
+
         var key = new SymmetricSecurityKey(
-          Encoding.UTF8.GetBytes(keyText));
-      
+            Encoding.UTF8.GetBytes(keyText));
+
         var creds = new SigningCredentials(
-          key, 
-          SecurityAlgorithms.HmacSha256);
-      
+            key,
+            SecurityAlgorithms.HmacSha256);
+
         var expiresIn = int.Parse(
-          jwtConfig["ExpiresInMinutes"] ?? "60");
+            jwtConfig["ExpiresInMinutes"] ?? "60");
 
         var claims = new List<Claim>
         {
@@ -72,7 +72,6 @@ public class JwtService
             expires: DateTime.UtcNow.AddMinutes(expiresIn),
             signingCredentials: creds);
 
-        return new JwtSecurityTokenHandler()
-            .WriteToken(token);
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
