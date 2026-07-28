@@ -17,6 +17,26 @@ namespace Dsw2026Tpi.Application.Services
         }
         public async Task<Pagination<SpecialityModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null)
         {
+            if (pageSize <= 0)
+            {
+                throw new ValidationException(
+                    "El tamaño de página debe ser mayor que cero.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "pageSize",
+                        "Debe ser mayor que cero.");
+            }
+
+            if (pageIndex < 0)
+            {
+                throw new ValidationException(
+                    "El índice de página no puede ser negativo.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "pageIndex",
+                        "No puede ser negativo.");
+            }
+
             if (!string.IsNullOrWhiteSpace(name))
             {
                 name = name.Trim();
@@ -25,7 +45,7 @@ namespace Dsw2026Tpi.Application.Services
                 {
                     throw new ValidationException(
                         "El nombre debe tener entre 3 y 100 caracteres.",
-                        ErrorCodes.VALIDATION_ERROR)
+                        nameof(ErrorCodes.VALIDATION_ERROR))
                         .WithDetail(
                             "name",
                             "Debe tener entre 3 y 100 caracteres.");
@@ -42,11 +62,16 @@ namespace Dsw2026Tpi.Application.Services
 
             ValidateRequest(request);
 
-            var existingSpecialities = await _persistence.GetFiltered<Speciality>(s => s.Name == request.Name && !s.Deleted);
+            var existingSpeciality = await _persistence.First<Speciality>(s => s.Name == request.Name && !s.Deleted);
 
-            if (existingSpecialities?.Any() == true)
+            if (existingSpeciality is not null)
             {
-                throw new ConflictException(ErrorCodes.VALIDATION_ERROR,"Ya existe una especialidad con ese nombre.");
+                throw new ConflictException(
+                    "DUPLICATE_SPECIALITY_NAME", 
+                    "Ya existe una especialidad con ese nombre.")
+                    .WithDetail(
+                    "name",
+                    "El nombre de la especialidad ya se encuentra registrado.");     
             }
 
             var speciality = new Speciality(
@@ -66,6 +91,16 @@ namespace Dsw2026Tpi.Application.Services
 
         public async Task<SpecialityModel.Response> Update(Guid id, SpecialityModel.Request request)
         {
+            if (id == Guid.Empty)
+            {
+                throw new ValidationException(
+                    "El identificador de la especialidad es obligatorio.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "id",
+                        "Debe indicar un identificador válido.");
+            }
+
             request = NormalizeRequest(request);
 
             ValidateRequest(request);
@@ -77,11 +112,16 @@ namespace Dsw2026Tpi.Application.Services
                 throw new EntityNotFoundException("Speciality");
             }
 
-            var existingSpecialities = await _persistence.GetFiltered<Speciality>(s => s.Name == request.Name && s.Id != id && !s.Deleted);
+            var existingSpeciality = await _persistence.First<Speciality>(s => s.Name == request.Name && s.Id != id && !s.Deleted);
 
-            if (existingSpecialities?.Any() == true)
+            if (existingSpeciality is not null)
             {
-                throw new ConflictException(ErrorCodes.VALIDATION_ERROR, "Ya existe una especialidad con ese nombre."); 
+                throw new ConflictException(
+                    "DUPLICATE_SPECIALITY_NAME", 
+                    "Ya existe una especialidad con ese nombre.")
+                    .WithDetail( 
+                    "name", 
+                    "El nombre de la especialidad ya se encuentra registrado.");
             }
 
             speciality.Update(request.Name, request.Description);
@@ -95,6 +135,16 @@ namespace Dsw2026Tpi.Application.Services
 
         public async Task Delete(Guid id)
         {
+            if (id == Guid.Empty)
+            {
+                throw new ValidationException(
+                    "El identificador de la especialidad es obligatorio.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "id",
+                        "Debe indicar un identificador válido.");
+            }
+
             var speciality = await _persistence.GetById<Speciality>(id);
 
             if (speciality is null || speciality.Deleted)
@@ -111,31 +161,59 @@ namespace Dsw2026Tpi.Application.Services
         private static SpecialityModel.Request NormalizeRequest(
                 SpecialityModel.Request request)
         {
-            return new SpecialityModel.Request(
-                request.Name?.Trim() ?? string.Empty,
-                request.Description?.Trim() ?? string.Empty);
+            if (request is null)
+            {
+                throw new ValidationException(
+                    "Los datos de la especialidad son obligatorios.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "request",
+                        "Debe enviar los datos de la especialidad.");
+            }
+
+            return new SpecialityModel.Request(request.Name?.Trim() ?? string.Empty, request.Description?.Trim() ?? string.Empty);
         }
 
         private static void ValidateRequest(SpecialityModel.Request request)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
             {
-                throw new ValidationException("El nombre es obligatorio.", ErrorCodes.VALIDATION_ERROR).WithDetail("name", "El nombre es obligatorio.");
+                throw new ValidationException(
+                    "El nombre es obligatorio.", 
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "name",
+                        "El nombre es obligatorio.");
             }
 
             if (request.Name.Length < 3 || request.Name.Length > 100)
             {
-                throw new ValidationException("El nombre debe tener entre 3 y 100 caracteres.", ErrorCodes.VALIDATION_ERROR).WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
+                throw new ValidationException(
+                    "El nombre debe tener entre 3 y 100 caracteres.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "name",
+                        "Debe tener entre 3 y 100 caracteres.");
             }
 
             if (string.IsNullOrWhiteSpace(request.Description))
             {
-                throw new ValidationException("La descripción es obligatoria.", ErrorCodes.VALIDATION_ERROR).WithDetail("description", "La descripción es obligatoria.");
+                throw new ValidationException(
+                    "La descripción es obligatoria.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "description",
+                        "La descripción es obligatoria.");
             }
 
             if (request.Description.Length < 10 || request.Description.Length > 100)
             {
-                throw new ValidationException("La descripción debe tener entre 10 y 100 caracteres.", ErrorCodes.VALIDATION_ERROR).WithDetail("description", "Debe tener entre 10 y 100 caracteres.");
+                throw new ValidationException(
+                    "La descripción debe tener entre 10 y 100 caracteres.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "description",
+                        "Debe tener entre 10 y 100 caracteres.");
             }
         }
     }
