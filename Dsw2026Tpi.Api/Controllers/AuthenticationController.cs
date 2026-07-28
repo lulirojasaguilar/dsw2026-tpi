@@ -13,15 +13,12 @@ public class AuthenticationController : AppController
     {
         _authenticationService = authenticationService;
     }
-    // Tener cuidado eliminarlo antes de entregar porque no se pide en el TPI, solo sire para probar
-    [HttpPost("admin/register")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
 
     [HttpPost("admin/login")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Login([FromBody] LoginAdminModel.Request request)
+    public async Task<IActionResult> Login(
+        [FromBody] LoginAdminModel.Request request)
     {
         var result = await _authenticationService.LoginAdmin(request);
         return Ok(result);
@@ -32,7 +29,7 @@ public class AuthenticationController : AppController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> LoginPatient(
-    [FromBody] LoginPatientModel.Request request)
+        [FromBody] LoginPatientModel.Request request)
     {
         var result = await _authenticationService.LoginPatient(request);
 

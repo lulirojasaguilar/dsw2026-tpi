@@ -38,7 +38,8 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task<LoginAdminModel.Response> LoginAdmin(LoginAdminModel.Request request)
     {
-        var validationErrors = new List<(string Field, string Issue)>();
+        var validationErrors = 
+            new List<(string Field, string Issue)>();
 
         if (!request.Email.IsEmailValid())
         {
@@ -66,7 +67,9 @@ public class AuthenticationService : IAuthenticationService
                 .WithDetail(validationErrors);
         }
 
-        var user = await _userManager.FindByEmailAsync(request.Email);
+        var user = 
+            await _userManager.FindByEmailAsync(
+                request.Email);
 
         if (user is null || user.Deleted)
         {
@@ -82,33 +85,38 @@ public class AuthenticationService : IAuthenticationService
         if (!result)
         {
             _logger.LogInformation(
-                "Intento de login de administrador fallido para. Contraseña incorrecta"
+                "Intento de login de administrador fallido. Contraseña incorrecta"
                 );
 
             throw new AuthenticationException();
         }
 
-        var roles = await _userManager.GetRolesAsync(user);
+        var roles = 
+            await _userManager.GetRolesAsync(user);
 
-        var adminRole = roles.FirstOrDefault(role =>
-            string.Equals(
-                role,
-                Roles.Administrator,
-                StringComparison.OrdinalIgnoreCase));
+        var adminRole = 
+            roles.FirstOrDefault(role =>
+                string.Equals(
+                    role,
+                    Roles.Administrator,
+                    StringComparison.OrdinalIgnoreCase));
 
         if (adminRole is null)
         {
             _logger.LogWarning(
-                "Intento de acceso administrativo rechazado porque el usuario no posee el rol requerido.");
+                "Intento de acceso administrativo rechazado. El usuario no posee el rol requerido.");
 
             throw new AuthenticationException();
         }
 
-        var username = user.UserName
+        var username = 
+            user.UserName
             ?? user.Email
             ?? throw new AuthenticationException();
 
-        var token = _jwtService.GenerateToken(user.UserName!, adminRole);
+        var token = _jwtService.GenerateToken(
+            username, 
+            adminRole);
 
         _logger.LogInformation(
             "Login de administrador realizado correctamente."
@@ -124,7 +132,8 @@ public class AuthenticationService : IAuthenticationService
         LoginPatientModel.Request request)
     {
         
-        var validationErrors = new List<(string Field, string Issue)>();
+        var validationErrors = 
+            new List<(string Field, string Issue)>();
 
         if (!request.Email.IsEmailValid())
         {
@@ -156,8 +165,12 @@ public class AuthenticationService : IAuthenticationService
         }
 
         
-        var patient = await _persistence.First<Patient>(
-            p => p.Dni == request.Dni && !p.Deleted);
+        var patient = 
+            await _persistence.First<Patient>(
+            
+                p => 
+                    p.Dni == request.Dni && 
+                    !p.Deleted);
 
         ApplicationUser user;
 
@@ -173,12 +186,13 @@ public class AuthenticationService : IAuthenticationService
                 UpdatedAt = DateTime.UtcNow
             };
 
-            var createUserResult = await _userManager.CreateAsync(user);
+            var createUserResult = 
+                await _userManager.CreateAsync(user);
 
             if (!createUserResult.Succeeded)
             {
                 _logger.LogInformation(
-                    "Autoregistro de paciente fallido."
+                    "Autoregistro de paciente fallido. No se pudo crear el usuario."
                     );
 
                 throw new ConflictException(
@@ -186,16 +200,21 @@ public class AuthenticationService : IAuthenticationService
                     ErrorCodes.REGISTER_USER_CONFLICT)
                     .WithDetail(
                         createUserResult.Errors.Select(
-                            error => (error.Code, error.Description)
-                        )
+                            error => 
+                                (
+                                error.Code, 
+                                error.Description)
+                         )
                     );
             }
 
             
             if (!await _roleManager.RoleExistsAsync(Roles.Patient))
             {
-                var createRoleResult = await _roleManager.CreateAsync(
-                          new IdentityRole(Roles.Patient));
+                var createRoleResult = 
+                    await _roleManager.CreateAsync(
+                          new IdentityRole(
+                              Roles.Patient));
 
                 if (!createRoleResult.Succeeded)
                 {
@@ -207,17 +226,21 @@ public class AuthenticationService : IAuthenticationService
                         ErrorCodes.REGISTER_USER_CONFLICT)
                         .WithDetail(
                             createRoleResult.Errors.Select(
-                                error => (error.Code, error.Description)
+                                error => 
+                                    (
+                                        error.Code, 
+                                        error.Description
+                                    )
                             )
                         );
                 }
             }
 
             
-            var addRoleResult = await _userManager.AddToRoleAsync(
-                user,
-                Roles.Patient
-            );
+            var addRoleResult = 
+                await _userManager.AddToRoleAsync(
+                    user,
+                    Roles.Patient);
 
             if (!addRoleResult.Succeeded)
             {
@@ -230,7 +253,11 @@ public class AuthenticationService : IAuthenticationService
                     ErrorCodes.REGISTER_USER_CONFLICT)
                     .WithDetail(
                         addRoleResult.Errors.Select(
-                            error => (error.Code, error.Description)
+                            error => 
+                                (
+                                error.Code, 
+                                error.Description
+                                )
                         )
                     );
             }
@@ -268,8 +295,9 @@ public class AuthenticationService : IAuthenticationService
                 throw new AuthenticationException();
             }
 
-            user = await _userManager.FindByIdAsync(
-                patient.ApplicationUserId)
+            user = 
+                await _userManager.FindByIdAsync(
+                    patient.ApplicationUserId)
                 ?? throw new AuthenticationException();
 
             if (user.Deleted)
@@ -285,13 +313,15 @@ public class AuthenticationService : IAuthenticationService
         }
 
 
-        var roles = await _userManager.GetRolesAsync(user);
+        var roles = 
+            await _userManager.GetRolesAsync(user);
 
-        var patientRole = roles.FirstOrDefault(role =>
-            string.Equals(
-        role,
-        Roles.Patient,
-        StringComparison.OrdinalIgnoreCase));
+        var patientRole = 
+            roles.FirstOrDefault(role =>
+                string.Equals(
+                    role,
+                    Roles.Patient,
+                    StringComparison.OrdinalIgnoreCase));
 
         if (patientRole is null)
         {
@@ -301,7 +331,8 @@ public class AuthenticationService : IAuthenticationService
             throw new AuthenticationException();
         }
 
-        var username = user.UserName
+        var username = 
+            user.UserName
             ?? user.Email
             ?? throw new AuthenticationException();
 
@@ -310,6 +341,9 @@ public class AuthenticationService : IAuthenticationService
             patientRole,
             patient.Id,
             patient.Dni);
+
+        _logger.LogInformation(
+            "Login de paciente realizado correctamente.");
 
         return new LoginPatientModel.Response(
             token,
