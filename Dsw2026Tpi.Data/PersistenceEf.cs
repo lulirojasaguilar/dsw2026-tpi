@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace Dsw2026Tpi.Data;
 
-public class PersistenceEf: IPersistence
+public class PersistenceEf : IPersistence
 {
     private readonly Dsw2026TpiDbContext _context;
 
@@ -101,7 +101,7 @@ public class PersistenceEf: IPersistence
 
         var total = await filtered.CountAsync();
 
-        
+
         async Task<Pagination<T>> GetPage(int skip, int take)
         {
             var data = await filtered.Skip(skip)
@@ -110,7 +110,7 @@ public class PersistenceEf: IPersistence
 
             return new Pagination<T>(pageSize, pageIndex, total, data);
         }
-        
+
         //la pagina existe
         if (total > pageSize * pageIndex)
         {

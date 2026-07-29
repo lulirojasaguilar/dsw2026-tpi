@@ -9,6 +9,7 @@ namespace Dsw2026Tpi.Application.Services;
 public class JwtService
 {
     private readonly IConfiguration _config;
+
     public JwtService(IConfiguration config)
     {
         _config = config;
@@ -16,14 +17,26 @@ public class JwtService
 
     public string GenerateToken(string username, string role, Guid? patientId = null, long? dni = null)
     {
-       
         var jwtConfig = _config.GetSection("Jwt");
-        var keyText = jwtConfig["Key"] ?? throw new ArgumentNullException("Jwt Key");
-        var issuer = jwtConfig["Issuer"] ?? throw new ArgumentNullException("Jwt Issuer");
-        var audience = jwtConfig["Audience"] ?? throw new ArgumentNullException("Jwt Audience");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyText));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var expiresIn = int.Parse(jwtConfig["ExpiresInMinutes"] ?? "60");
+
+        var keyText = jwtConfig["Key"]
+            ?? throw new ArgumentNullException("Jwt Key");
+
+        var issuer = jwtConfig["Issuer"]
+            ?? throw new ArgumentNullException("Jwt Issuer");
+
+        var audience = jwtConfig["Audience"]
+            ?? throw new ArgumentNullException("Jwt Audience");
+
+        var key = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(keyText));
+
+        var creds = new SigningCredentials(
+            key,
+            SecurityAlgorithms.HmacSha256);
+
+        var expiresIn = int.Parse(
+            jwtConfig["ExpiresInMinutes"] ?? "60");
 
         var claims = new List<Claim>
         {
@@ -58,6 +71,6 @@ public class JwtService
 
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
-        return tokenString;
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

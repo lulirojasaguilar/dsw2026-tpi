@@ -12,19 +12,19 @@ namespace Dsw2026Tpi.Api.Configurations
         {
             using var scope = serviceProvider.CreateScope();
 
-            var userManager =
-                scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+			var userManager =
+				scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-            var roleManager =
-                scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+			var roleManager =
+				scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-            var adminEmail = configuration["Admin:Email"]
-                ?? throw new InvalidOperationException(
-                    "No se configuró Admin:Email.");
+			var adminEmail = configuration["Admin:Email"]
+				?? throw new InvalidOperationException(
+					"No se configuró Admin:Email.");
 
-            var adminPassword = configuration["Admin:Password"]
-                ?? throw new InvalidOperationException(
-                    "No se configuró Admin:Password.");
+			var adminPassword = configuration["Admin:Password"]
+				?? throw new InvalidOperationException(
+					"No se configuró Admin:Password.");
 
             if (!await roleManager.RoleExistsAsync(Roles.Administrator))
             {
@@ -43,12 +43,12 @@ namespace Dsw2026Tpi.Api.Configurations
                 }
             }
 
-            var admin = await userManager.FindByEmailAsync(adminEmail);
+			var admin = await userManager.FindByEmailAsync(adminEmail);
 
-            if (admin is not null)
-            {
-                return;
-            }
+			if (admin is not null)
+			{
+				return;
+			}
 
             admin = new ApplicationUser
             {
@@ -60,33 +60,33 @@ namespace Dsw2026Tpi.Api.Configurations
                 UpdatedAt = DateTime.UtcNow
             };
 
-            var creationResult =
-                await userManager.CreateAsync(admin, adminPassword);
+			var creationResult =
+				await userManager.CreateAsync(admin, adminPassword);
 
-            if (!creationResult.Succeeded)
-            {
-                var errors = string.Join(
-                    "; ",
-                    creationResult.Errors.Select(error => error.Description));
+			if (!creationResult.Succeeded)
+			{
+				var errors = string.Join(
+					"; ",
+					creationResult.Errors.Select(error => error.Description));
 
-                throw new InvalidOperationException(
-                    $"No se pudo crear el usuario administrador: {errors}");
-            }
+				throw new InvalidOperationException(
+					$"No se pudo crear el usuario administrador: {errors}");
+			}
 
-            var roleResult =
-                await userManager.AddToRoleAsync(
-                    admin,
-                    Roles.Administrator);
+			var roleResult =
+				await userManager.AddToRoleAsync(
+					admin,
+					Roles.Administrator);
 
-            if (!roleResult.Succeeded)
-            {
-                var errors = string.Join(
-                    "; ",
-                    roleResult.Errors.Select(error => error.Description));
+			if (!roleResult.Succeeded)
+			{
+				var errors = string.Join(
+					"; ",
+					roleResult.Errors.Select(error => error.Description));
 
-                throw new InvalidOperationException(
-                    $"No se pudo asignar el rol Administrador: {errors}");
-            }
-        }
-    }
+				throw new InvalidOperationException(
+					$"No se pudo asignar el rol Administrador: {errors}");
+			}
+		}
+	}
 }

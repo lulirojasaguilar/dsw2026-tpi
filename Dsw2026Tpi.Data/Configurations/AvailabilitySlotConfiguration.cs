@@ -47,6 +47,10 @@ namespace Dsw2026Tpi.Data.Configurations
                     .HasDefaultValue(false)
                     .IsRequired();
 
+            builder.Property(x => x.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+
 
             /* Relación compuesta con AvailabilityRule.
                No alcanza con comprobar que AvailabilityRuleId y DoctorId existan por separado. Ambos deben corresponder a la misma regla.

@@ -16,15 +16,24 @@ public class Doctor : EntityBase
 #pragma warning restore CS8618
     #endregion
 
-    public Doctor(string name, string licenseNumber, Speciality speciality, Guid? id = null) : base(id)
+    public Doctor(
+        string name, 
+        string licenseNumber, 
+        Speciality speciality, 
+        Guid? id = null) : base(id)
     {
+       Validate(name, licenseNumber, speciality);
+       
         Name = name.Trim();
         LicenseNumber = licenseNumber.Trim();
         Speciality = speciality;
         SpecialityId = speciality.Id;
-        Deleted = false; 
+        Deleted = false;
     }
-    public void Update(string name, string licenseNumber, Speciality speciality)
+    public void Update(
+        string name, 
+        string licenseNumber, 
+        Speciality speciality)
     {
         Validate(name, licenseNumber, speciality);
 
@@ -33,9 +42,9 @@ public class Doctor : EntityBase
         Speciality = speciality;
         SpecialityId = speciality.Id;
     }
-    public void Delete() 
+    public void Delete()
     {
-        Deleted = true; 
+        Deleted = true;
 
     }
 

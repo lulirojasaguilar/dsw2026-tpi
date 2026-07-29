@@ -12,9 +12,10 @@ namespace Dsw2026Tpi.Domain.Entities
         public DateOnly SlotDate { get; private set; }
         public TimeSpan StartTime { get; private set; }
         public TimeSpan EndTime { get; private set; }
-        public string Status { get; private set; } = null!;
+        public string Status { get; private set; } = string.Empty;
         public bool Deleted { get; private set; }
-
+        public byte[] RowVersion { get; private set; } =
+                Array.Empty<byte>();
         protected AvailabilitySlot() { }
 
         public AvailabilitySlot(
@@ -61,7 +62,7 @@ namespace Dsw2026Tpi.Domain.Entities
             Deleted = true;
         }
 
-      
+
         public void MarkAsBooked()
         {
             if (Status != AvailabilityStatuses.Available)

@@ -176,7 +176,7 @@ public class AuthenticationService : IAuthenticationService
 
         if (patient is null)
         {
-            
+
             user = new ApplicationUser
             {
                 UserName = request.Email,
@@ -208,7 +208,7 @@ public class AuthenticationService : IAuthenticationService
                     );
             }
 
-            
+
             if (!await _roleManager.RoleExistsAsync(Roles.Patient))
             {
                 var createRoleResult = 
@@ -262,7 +262,7 @@ public class AuthenticationService : IAuthenticationService
                     );
             }
 
-            
+
             patient = new Patient(
                 request.Dni,
                 request.Email,
@@ -282,7 +282,7 @@ public class AuthenticationService : IAuthenticationService
         }
         else
         {
-            
+
             if (!string.Equals(
                     patient.Email,
                     request.Email,

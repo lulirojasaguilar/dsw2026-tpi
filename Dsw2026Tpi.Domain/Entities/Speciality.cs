@@ -1,10 +1,10 @@
 ﻿namespace Dsw2026Tpi.Domain.Entities;
 
-public class Speciality: EntityBase
+public class Speciality : EntityBase
 {
     public string Name { get; private set; }
     public string Description { get; private set; }
-    public bool Deleted { get; private set;}
+    public bool Deleted { get; private set; }
 
     #region Constructor for EF
 #pragma warning disable CS8618

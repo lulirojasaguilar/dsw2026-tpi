@@ -16,7 +16,13 @@ namespace Dsw2026Tpi.Domain.Entities
 
         protected AvailabilityRule() { }
 
-        public AvailabilityRule(Guid doctorId, int month, int year, int dayOfWeek, TimeSpan startTime, TimeSpan endTime)
+        public AvailabilityRule(
+          Guid doctorId,  
+          int month, 
+          int year, 
+          int dayOfWeek, 
+          TimeSpan startTime, 
+          TimeSpan endTime)
         {
             if (doctorId == Guid.Empty)
             {

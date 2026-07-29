@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Dsw2026Tpi.Domain.Constants
 {
-    
+
     public static class AvailabilityStatuses
     {
         public const string Available = "AVAILABLE";
