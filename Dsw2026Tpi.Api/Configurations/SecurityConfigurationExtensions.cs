@@ -1,15 +1,43 @@
-﻿using Dsw2026Tpi.CrossCutting.Identity;
+﻿using System.Text;
+using System.Text.Json;
+using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Data.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 
 namespace Dsw2026Tpi.Api.Configurations;
 
 public static class SecurityConfigurationExtensions
 {
-    public static IServiceCollection AddAppAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddAppIdentity(
+        this IServiceCollection services)
+    {
+        services.AddIdentityCore<ApplicationUser>(options =>
+        {
+            options.Password = new PasswordOptions
+            {
+                RequiredLength = 8,
+                RequireLowercase = true,
+                RequireUppercase = true,
+                RequireDigit = true,
+                RequireNonAlphanumeric = false
+            };
+            options.User.RequireUniqueEmail = true;
+        })
+        .AddRoles<IdentityRole<Guid>>()
+        .AddEntityFrameworkStores<AuthenticationDbContext>()
+        .AddSignInManager();
+
+        return services;
+    }
+
+    public static IServiceCollection AddAppAuthentication(
+        this IServiceCollection services, 
+        IConfiguration configuration)
     {
         //Obtener parámetros para creación del JWT desde appsettings.json
         var jwtConfig = configuration.GetSection("Jwt");
@@ -38,6 +66,18 @@ public static class SecurityConfigurationExtensions
                     ValidAudience = audience,
                     IssuerSigningKey = new SymmetricSecurityKey(key)
                 };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnChallenge = context =>
+                    {
+                        context.HandleResponse();
+                        return WriteErrorAsync(context.Response, nameof(ErrorCodes.AUTHENTICATION_FAILED), ErrorCodes.AUTHENTICATION_FAILED, StatusCodes.Status401Unauthorized);
+                    },  
+
+                    OnForbidden = context =>
+                        WriteErrorAsync(context.Response, nameof(ErrorCodes.AUTHORIZATION_FAILED), ErrorCodes.AUTHORIZATION_FAILED, StatusCodes.Status403Forbidden)
+                    };
             });
         services.AddAuthorizationBuilder()
             .AddPolicy(Policies.AdminPolicy, policy =>
@@ -47,7 +87,26 @@ public static class SecurityConfigurationExtensions
         return services;
     }
 
-    public static IServiceCollection AddAppCors(this IServiceCollection services, IConfiguration configuration)
+    private static async Task WriteErrorAsync(HttpResponse response, string errorCode, string message, int statusCode)
+    {
+        if (response.HasStarted)
+        {
+            return;
+        }
+
+        response.ContentType = "application/json";
+        response.StatusCode = statusCode;
+
+        var error = new ErrorResponse(errorCode, message);
+
+        await response.WriteAsync(JsonSerializer.Serialize(
+            error,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+    }
+
+    public static IServiceCollection AddAppCors(
+        this IServiceCollection services, 
+        IConfiguration configuration)
     {
         //Obtener configuración para CORS desde appsettings.json
         var allowedOrigins = configuration
@@ -80,25 +139,6 @@ public static class SecurityConfigurationExtensions
             });
         });
 
-        return services;
-    }
-
-    public static IServiceCollection AddAppIdentity(this IServiceCollection services)
-    {
-        services.AddIdentityCore<ApplicationUser>(options =>
-        {
-            options.Password = new PasswordOptions
-            {
-                RequiredLength = 8,
-                RequireLowercase = true,
-                RequireUppercase = true,
-                RequireDigit = true
-            };
-
-        }).AddRoles<IdentityRole>()
-          .AddEntityFrameworkStores<AuthenticationDbContext>()
-          .AddSignInManager()
-          .AddDefaultTokenProviders();
         return services;
     }
 }

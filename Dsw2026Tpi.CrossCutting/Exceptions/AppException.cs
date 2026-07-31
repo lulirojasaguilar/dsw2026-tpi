@@ -36,7 +36,7 @@ public abstract class AppException : Exception
         Error.AddDetail(field, issue);
         return this;
     }
-    public AppException WithDetail(IEnumerable<(string, string)> details)
+    public AppException WithDetail(IEnumerable<(string Field, string Issue)> details)
     {
         Error.AddDetail(details);
         return this;

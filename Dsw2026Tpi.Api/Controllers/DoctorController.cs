@@ -1,8 +1,8 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
-using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.CrossCutting.Identity;
-using Dsw2026Tpi.CrossCutting.Resources;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,11 +20,14 @@ public class DoctorController : AppController
     }
 
     [HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Pagination<DoctorModel.Response>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAll([FromQuery]int pageSize, [FromQuery]int pageIndex, [FromQuery]string? name = null, [FromQuery] Guid? specialtyId = null)
+    public async Task<IActionResult> GetAll(
+        [FromQuery]int pageSize = 10, 
+        [FromQuery]int pageIndex = 0, 
+        [FromQuery]string? name = null, 
+        [FromQuery] Guid? specialtyId = null)
     {
         var doctors = await _service.GetAll(
             pageSize,
@@ -37,13 +40,14 @@ public class DoctorController : AppController
 
     [HttpPost]
     [Authorize(Policy = Policies.AdminPolicy)]
-    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(DoctorModel.Response), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Create([FromBody] DoctorModel.Request request)
+
+    public async Task<IActionResult> Create(
+        [FromBody] DoctorModel.Request request)
     {
         var doctor = await _service.Create(request);
 
@@ -52,14 +56,15 @@ public class DoctorController : AppController
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = Policies.AdminPolicy)]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(DoctorModel.Response), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
 
-    public async Task<IActionResult> Update(Guid id, [FromBody] DoctorModel.Request request)
+    public async Task<IActionResult> Update(
+        [FromRoute] Guid id, 
+        [FromBody] DoctorModel.Request request)
     {
         var doctor = await _service.Update(id, request);
 
@@ -68,26 +73,29 @@ public class DoctorController : AppController
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = Policies.AdminPolicy)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(SuccessResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(
+        [FromRoute] Guid id)
     {
         await _service.Delete(id);
 
-        return NoContent();
+        return Ok(new SuccessResponse());
     }
 
     [HttpGet("{id:guid}/availabilities")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IReadOnlyCollection<DoctorModel.AvailabilityResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAvailabilities(Guid id)
+    public async Task<IActionResult> GetAvailabilities(
+        [FromRoute] Guid id,
+        [FromQuery] byte? month = null,
+        [FromQuery] short? year = null)
     {
-        var availabilities = await _service.GetAvailabilities(id);
+        var availabilities = await _service.GetAvailabilities(id, month, year);
 
         return Ok(availabilities);
     }

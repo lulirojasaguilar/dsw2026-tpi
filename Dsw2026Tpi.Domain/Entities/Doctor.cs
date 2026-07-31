@@ -1,11 +1,18 @@
-﻿namespace Dsw2026Tpi.Domain.Entities;
+﻿using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
+
+namespace Dsw2026Tpi.Domain.Entities;
 
 public class Doctor : EntityBase
 {
     public string Name { get; private set; }
-    public string LicenseNumber { get; private set; }
+
+    public string? LicenseNumber { get; private set; }
+
     public bool Deleted { get; private set; }
+
     public Guid SpecialityId { get; private set; }
+
     public Speciality Speciality { get; private set; }
 
     #region Constructor for EF
@@ -18,30 +25,32 @@ public class Doctor : EntityBase
 
     public Doctor(
         string name, 
-        string licenseNumber, 
+        string? licenseNumber, 
         Speciality speciality, 
         Guid? id = null) : base(id)
     {
-       Validate(name, licenseNumber, speciality);
+        Validate(name, licenseNumber, speciality);
        
         Name = name.Trim();
-        LicenseNumber = licenseNumber.Trim();
+        LicenseNumber = string.IsNullOrWhiteSpace(licenseNumber) ? null : licenseNumber.Trim();
         Speciality = speciality;
         SpecialityId = speciality.Id;
         Deleted = false;
     }
+
     public void Update(
         string name, 
-        string licenseNumber, 
+        string? licenseNumber, 
         Speciality speciality)
     {
         Validate(name, licenseNumber, speciality);
 
         Name = name.Trim();
-        LicenseNumber = licenseNumber.Trim();
+        LicenseNumber = string.IsNullOrWhiteSpace(licenseNumber) ? null : licenseNumber.Trim();
         Speciality = speciality;
         SpecialityId = speciality.Id;
     }
+
     public void Delete()
     {
         Deleted = true;
@@ -49,59 +58,34 @@ public class Doctor : EntityBase
     }
 
     private static void Validate(
-    string name,
-    string licenseNumber,
-    Speciality speciality)
+        string name,
+        string? licenseNumber,
+        Speciality speciality)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        var normalizedName = name?.Trim() ?? string.Empty;
+
+        if (normalizedName.Length is < 3 or > 100)
         {
-            throw new ArgumentException(
-                "El nombre del médico es obligatorio.",
-                nameof(name));
+            throw new ValidationException(
+                "El nombre del médico no es válido.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail("name", "La longitud debe estar entre 3 y 100 caracteres.");
         }
 
-        var normalizedName = name.Trim();
-
-        if (normalizedName.Length < 3)
+        if (!string.IsNullOrWhiteSpace(licenseNumber) && licenseNumber.Trim().Length > 50)
         {
-            throw new ArgumentException(
-                "El nombre del médico debe tener al menos 3 caracteres.",
-                nameof(name));
+            throw new ValidationException(
+                "El número de matrícula no es válido.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail("licenseNumber", "No puede superar los 50 caracteres.");
         }
 
-        if (normalizedName.Length > 100)
+        if (speciality is null || speciality.Id == Guid.Empty)
         {
-            throw new ArgumentException(
-                "El nombre del médico no puede superar los 100 caracteres.",
-                nameof(name));
-        }
-
-        if (string.IsNullOrWhiteSpace(licenseNumber))
-        {
-            throw new ArgumentException(
-                "El número de matrícula es obligatorio.",
-                nameof(licenseNumber));
-        }
-
-        if (licenseNumber.Trim().Length > 50)
-        {
-            throw new ArgumentException(
-                "El número de matrícula no puede superar los 50 caracteres.",
-                nameof(licenseNumber));
-        }
-
-        if (speciality is null)
-        {
-            throw new ArgumentNullException(
-                nameof(speciality),
-                "La especialidad es obligatoria.");
-        }
-
-        if (speciality.Id == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "La especialidad debe tener un identificador válido.",
-                nameof(speciality));
+            throw new ValidationException(
+                "La especialidad indicada no es válida.",
+                nameof(ErrorCodes.SPECIALITY_NOT_FOUND))
+                .WithDetail("specialityId", "Debe corresponder a una especialidad existente.");
         }
     }
 

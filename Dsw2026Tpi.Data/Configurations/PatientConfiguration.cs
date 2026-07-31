@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Dsw2026Tpi.Domain.Entities;
+﻿using Dsw2026Tpi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -13,23 +10,34 @@ namespace Dsw2026Tpi.Data.Configurations
         {
             builder.ToTable("Patients");
 
+            builder.HasKey(p => p.Id);
+
             builder.Property(p => p.Dni)
-                .IsRequired();
+                .IsRequired()
+                .HasMaxLength(10)
+                .HasColumnType("varchar(10)");
 
             builder.HasIndex(p => p.Dni)
-                .IsUnique();
+                .IsUnique()
+                .HasDatabaseName("UX_Patients_Dni");
 
-            builder.Property(p => p.Email)
-                .IsRequired()
-                .HasMaxLength(256);
-
-            builder.Property(p => p.ApplicationUserId)
-                .IsRequired()
-                .HasMaxLength(450);
+            builder.Property(p => p.FullName)
+                .HasMaxLength(150);
 
             builder.Property(p => p.Deleted)
-                .HasColumnName("deleted")
-                .HasDefaultValue(false);
+                .HasDefaultValue(false)
+                .HasColumnName("deleted");
+
+            builder.Property(p => p.CreatedAt)
+                .IsRequired();
+
+            builder.Property(p => p.UpdatedAt)
+                .IsRequired();
+
+            builder.HasIndex(p => p.ApplicationUserId)
+                .IsUnique()
+                .HasDatabaseName("UX_Patients_ApplicationUserId");
+
         }
     }
 }

@@ -13,7 +13,6 @@
             Guid DoctorId,
             List<DayRequest> Days
         );
-
       
         public record RuleSummary(
             Guid Id,

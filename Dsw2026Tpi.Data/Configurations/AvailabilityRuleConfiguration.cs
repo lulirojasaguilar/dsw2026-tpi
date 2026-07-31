@@ -8,7 +8,7 @@ namespace Dsw2026Tpi.Data.Configurations
     {
         public void Configure(EntityTypeBuilder<AvailabilityRule> builder)
         {
-            builder.ToTable("AvailabilityRule", table =>
+            builder.ToTable("AvailabilityRules", table =>
             {
                 table.HasCheckConstraint(
                     "CK_AvailabilityRule_Month",
@@ -23,62 +23,70 @@ namespace Dsw2026Tpi.Data.Configurations
                     "[StartTime] < [EndTime]");
             });
 
-            builder.HasKey(x => x.Id);
+            builder.HasKey(rule => rule.Id);
 
-            builder.Property(x => x.DoctorId).IsRequired();
+            builder.Property(rule => rule.Month)
+                .IsRequired()
+                .HasColumnType("tinyint");
 
-            builder.Property(x => x.Month).IsRequired();
+            builder.Property(rule => rule.Year)
+                .IsRequired()
+                .HasColumnType("smallint");
 
-            builder.Property(x => x.Year).IsRequired();
+            builder.Property(rule => rule.DayOfWeek)
+                .IsRequired()
+                .HasColumnType("smallint");
 
-            builder.Property(x => x.DayOfWeek).IsRequired();
+            builder.Property(rule => rule.StartTime)
+                .IsRequired()
+                .HasColumnType("time(0)");
 
-            builder.Property(x => x.StartTime)
-                .HasColumnType("time(0)")
-                .IsRequired();
+            builder.Property(rule => rule.EndTime)
+                .IsRequired()
+                .HasColumnType("time(0)");
 
-            builder.Property(x => x.EndTime)
-                .HasColumnType("time(0)")
-                .IsRequired();
+            builder.Property(rule => rule.Deleted)
+                 .HasDefaultValue(false)
+                 .HasColumnName("deleted");
 
-            builder.Property(x => x.Deleted)
-                    .HasDefaultValue(false)
-                    .IsRequired();
+            builder.Property(rule => rule.CreatedAt)
+                 .IsRequired();
 
-            // Representa la relacion entre AvailabilityRule con Doctor.Impide crear reglas con un DoctorId inexistente.
-            
-            builder.HasOne<Doctor>()
-                    .WithMany()
-                    .HasForeignKey(x => x.DoctorId)
-                    .OnDelete(DeleteBehavior.Restrict);
+            builder.Property(rule => rule.UpdatedAt)
+                  .IsRequired();
 
-            /* Clave alternativa necesaria para que AvailabilitySlot pueda referenciar conjuntamente: AvailabilityRule.Id + AvailabilityRule.DoctorId
-               De esta manera se garantiza que el DoctorId del slot sea el mismo DoctorId de la regla.*/
-
-            builder.HasAlternateKey(x => new
-                    {
-                         x.Id,
-                         x.DoctorId
-                     })
-                    .HasName("AK_AvailabilityRule_Id_DoctorId");
+            builder.HasOne(rule => rule.Doctor)
+                  .WithMany()
+                  .HasForeignKey(rule => rule.DoctorId)
+                  .IsRequired()
+                  .OnDelete(DeleteBehavior.Restrict);
 
             /* Evita repetir exactamente la misma regla activa.
                La detección de solapamientos parciales debe realizarse
                igualmente desde AvailabilityService. */
 
-            builder.HasIndex(x => new
+            builder.HasIndex(rule => new
             {
-                x.DoctorId,
-                x.Year,
-                x.Month,
-                x.DayOfWeek,
-                x.StartTime,
-                x.EndTime
+                rule.DoctorId,
+                rule.Year,
+                rule.Month,
+                rule.DayOfWeek,
+                rule.StartTime,
+                rule.EndTime
             })
-            .IsUnique()
-            .HasFilter("[Deleted] = 0")
-            .HasDatabaseName("UX_AvailabilityRule_ActiveRule");
+                .IsUnique()
+                .HasFilter("[deleted] = 0")
+                .HasDatabaseName("UX_AvailabilityRules_ActiveRule");
 
+            /* Clave alternativa necesaria para que AvailabilitySlot pueda referenciar conjuntamente: AvailabilityRule.Id + AvailabilityRule.DoctorId
+               De esta manera se garantiza que el DoctorId del slot sea el mismo DoctorId de la regla.*/
+
+            builder.HasAlternateKey(rule => new
+            {
+                rule.Id,
+                rule.DoctorId
+            })
+                    .HasName("AK_AvailabilityRules_Id_DoctorId");
         }
     }
 }

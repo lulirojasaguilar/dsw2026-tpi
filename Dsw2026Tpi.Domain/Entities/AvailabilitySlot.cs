@@ -8,47 +8,42 @@ namespace Dsw2026Tpi.Domain.Entities
     public class AvailabilitySlot : EntityBase
     {
         public Guid AvailabilityRuleId { get; private set; }
+
+        public AvailabilityRule AvailabilityRule { get; private set; } = null!;
+
         public Guid DoctorId { get; private set; }
+
         public DateOnly SlotDate { get; private set; }
+
         public TimeSpan StartTime { get; private set; }
+
         public TimeSpan EndTime { get; private set; }
+
         public string Status { get; private set; } = string.Empty;
+
         public bool Deleted { get; private set; }
-        public byte[] RowVersion { get; private set; } =
-                Array.Empty<byte>();
-        protected AvailabilitySlot() { }
+
+        private AvailabilitySlot() 
+        { 
+        }
 
         public AvailabilitySlot(
-            Guid availabilityRuleId, Guid doctorId, DateOnly slotDate, TimeSpan startTime, TimeSpan endTime)
+            AvailabilityRule rule,
+            Guid doctorId, 
+            DateOnly slotDate, 
+            TimeSpan startTime, 
+            TimeSpan endTime,
+            Guid? id = null) : base(id)
         {
-            if (availabilityRuleId == Guid.Empty)
+            if (rule is null || rule.Id == Guid.Empty)
             {
-                throw new ArgumentException(
-                    "AvailabilityRuleId es obligatorio.",
-                    nameof(availabilityRuleId));
+                throw new ValidationException(
+                    "La regla de disponibilidad indicada no es válida.",
+                    nameof(ErrorCodes.VALIDATION_ERROR));
             }
 
-            if (doctorId == Guid.Empty)
-            {
-                throw new ArgumentException(
-                    "DoctorId es obligatorio.",
-                    nameof(doctorId));
-            }
-
-            if (startTime >= endTime)
-            {
-                throw new ArgumentException(
-                    "StartTime debe ser menor a EndTime.");
-            }
-
-            if (endTime - startTime != TimeSpan.FromMinutes(30))
-            {
-                throw new ArgumentException(
-                    "Cada slot debe tener una duración exacta de 30 minutos.");
-            }
-
-
-            AvailabilityRuleId = availabilityRuleId;
+            AvailabilityRule = rule;
+            AvailabilityRuleId = rule.Id;
             DoctorId = doctorId;
             SlotDate = slotDate;
             StartTime = startTime;
@@ -57,37 +52,35 @@ namespace Dsw2026Tpi.Domain.Entities
             Deleted = false;
         }
 
-        public void Delete()
-        {
-            Deleted = true;
-        }
+        public bool IsAvailable =>
+            Status == AvailabilityStatuses.Available && !Deleted;
 
-
-        public void MarkAsBooked()
+        public void MarkBooked()
         {
-            if (Status != AvailabilityStatuses.Available)
+            if (!IsAvailable)
             {
                 throw new BusinessRuleException(
-                    "El turno no está disponible para reservar.", 
-                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
+                    "El turno no está disponible para reservar.",
+                    nameof(ErrorCodes.SLOT_NOT_AVAILABLE));
             }
+
             Status = AvailabilityStatuses.Booked;
         }
 
-        public void MarkAsBlocked()
+        public void MarkBlocked()
         {
-            if (Status != AvailabilityStatuses.Available)
+            if (!IsAvailable)
             {
                 throw new BusinessRuleException(
-                    "Solo se puede bloquear un turno que está disponible.", 
-                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
+                    "Solo se puede bloquear un turno que está disponible.",
+                    nameof(ErrorCodes.SLOT_NOT_AVAILABLE));
             }
             Status = AvailabilityStatuses.Blocked;
         }
 
-        public void MarkAsAvailable()
+        public void MarkAvailable()
         {
-            if (Status != AvailabilityStatuses.Booked)
+            if (Deleted || Status != AvailabilityStatuses.Booked)
             {
                 throw new BusinessRuleException(
                     "Solo un turno reservado puede volver a estar disponible.",
@@ -97,16 +90,9 @@ namespace Dsw2026Tpi.Domain.Entities
             Status = AvailabilityStatuses.Available;
         }
 
-        public void Unblock()
+        public void Delete()
         {
-            if (Status != AvailabilityStatuses.Blocked)
-            {
-                throw new BusinessRuleException(
-                    "Solo se puede desbloquear un turno bloqueado.",
-                    nameof(ErrorCodes.APPOINTMENT_CONFLICT));
-            }
-
-            Status = AvailabilityStatuses.Available;
+            Deleted = true;
         }
     }
 }

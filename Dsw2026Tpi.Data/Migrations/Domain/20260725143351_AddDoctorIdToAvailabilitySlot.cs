@@ -22,17 +22,12 @@ namespace Dsw2026Tpi.Data.Migrations.Domain
                 nullable: true);
 
             migrationBuilder.Sql(@"
-   UPDATE slot
-
-    SET slot.DoctorId = availabilityRule.DoctorId
-
-    FROM AvailabilitySlot AS slot
-
-    INNER JOIN AvailabilityRule AS availabilityRule
-
-        ON slot.AvailabilityRuleId = availabilityRule.Id;
-
-    """);
+                UPDATE slot
+                SET slot.DoctorId = availabilityRule.DoctorId
+                FROM AvailabilitySlot AS slot
+                INNER JOIN AvailabilityRule AS availabilityRule
+                ON slot.AvailabilityRuleId = availabilityRule.Id;
+            ");
 
             migrationBuilder.AlterColumn<Guid>(
                 name: "DoctorId",

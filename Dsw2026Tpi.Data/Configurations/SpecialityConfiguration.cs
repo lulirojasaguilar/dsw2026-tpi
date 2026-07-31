@@ -8,9 +8,11 @@ public class SpecialityConfiguration : IEntityTypeConfiguration<Speciality>
 {
     public void Configure(EntityTypeBuilder<Speciality> builder)
     {
-        builder.ToTable("Specialities");
+        builder.ToTable("Specialties");
 
-        builder.Property(s => s.Name)
+        builder.HasKey(speciality => speciality.Id);
+
+        builder.Property(speciality => speciality.Name)
             .IsRequired()
             .HasMaxLength(100);
 
@@ -19,11 +21,19 @@ public class SpecialityConfiguration : IEntityTypeConfiguration<Speciality>
              .HasMaxLength(100);
 
         builder.Property(speciality => speciality.Deleted)
-            .IsRequired()
-            .HasDefaultValue(false);
+            .HasDefaultValue(false)
+            .HasColumnName("deleted");
+
+        builder.Property(speciality => speciality.CreatedAt)
+            .IsRequired();
+
+        builder.Property(speciality => speciality.UpdatedAt)
+            .IsRequired();
 
         builder.HasIndex(speciality => speciality.Name)
             .IsUnique()
-            .HasFilter("[Deleted] = 0");
+            .HasFilter("[deleted] = 0")
+            .HasDatabaseName("UX_Specialties_Name_Active");
+
     }
 }

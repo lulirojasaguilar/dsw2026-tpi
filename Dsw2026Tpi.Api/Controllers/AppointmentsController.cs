@@ -1,9 +1,14 @@
-﻿using Dsw2026Tpi.Application.Dtos;
+﻿using Dsw2026Tpi.Api.Configurations;
+using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.CrossCutting.Identity;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Dsw2026Tpi.Api.Controllers
 {
@@ -19,22 +24,15 @@ namespace Dsw2026Tpi.Api.Controllers
 
         [HttpPost]
         [Authorize(Policy = Policies.PatientPolicy)]
-        [ProducesResponseType(
-            typeof(AppointmentModel.Response),
-            StatusCodes.Status201Created)]
-        [ProducesResponseType(
-            StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(
-            StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(
-            StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(
-            StatusCodes.Status404NotFound)]
-        [ProducesResponseType(
-            StatusCodes.Status409Conflict)]
-        public async Task<ActionResult<AppointmentModel.Response>>
-            Create(
-        [FromBody] AppointmentModel.Request request)
+        [EnableRateLimiting(RateLimitingConfigurationExtensions.AppointmentBookingPolicy)]
+        [ProducesResponseType(typeof(AppointmentModel.Response), StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> Create(
+            [FromBody] AppointmentModel.Request request)
         {
             var appointment =
                 await _service.Create(request);
@@ -46,73 +44,52 @@ namespace Dsw2026Tpi.Api.Controllers
 
         [HttpGet("patient")]
         [Authorize(Policy = Policies.PatientPolicy)]
-        [ProducesResponseType(
-            typeof(IReadOnlyCollection<AppointmentModel.Response>),
-            StatusCodes.Status200OK)]
-        [ProducesResponseType(
-            StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(
-            StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(
-            StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(
-            StatusCodes.Status404NotFound)]
-        public async Task<
-            ActionResult<
-                IReadOnlyCollection<AppointmentModel.Response>>>
-            GetByPatient(
-                [FromQuery] long dni)
+        [ProducesResponseType(typeof(IReadOnlyCollection<AppointmentModel.Response>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetByPatient(
+            [FromQuery] long dni)
         {
+            if (!TryGetPatientId(out var patientId))
+            {
+                throw new AuthorizationException(ErrorCodes.PATIENT_MISMATCH);
+            }
+
             var appointments =
-                await _service.GetByPatient(dni);
+                await _service.GetByPatient(dni, patientId);
 
             return Ok(appointments);
         }
 
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = Policies.PatientPolicy)]
-        [ProducesResponseType(
-            StatusCodes.Status204NoContent)]
-        [ProducesResponseType(
-            StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(
-            StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(
-            StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(
-            StatusCodes.Status404NotFound)]
-        [ProducesResponseType(
-            StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(SuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Cancel(
             [FromRoute] Guid id)
         {
             if (!TryGetPatientId(out var patientId))
             {
-                return Forbid();
+                throw new AuthorizationException(ErrorCodes.PATIENT_MISMATCH);
             }
 
             await _service.Cancel(
                 id,
                 patientId);
 
-            return NoContent();
+            return Ok(new SuccessResponse());
         }
 
         [HttpGet]
         [Authorize(Policy = Policies.AdminPolicy)]
-        [ProducesResponseType(
-            typeof(Pagination<AppointmentModel.Response>),
-            StatusCodes.Status200OK)]
-        [ProducesResponseType(
-            StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(
-            StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(
-            StatusCodes.Status403Forbidden)]
-        public async Task<
-            ActionResult<
-                Pagination<AppointmentModel.Response>>>
-            GetByDate(
+        [ProducesResponseType(typeof(Pagination<AppointmentModel.Response>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetByDate(
                 [FromQuery] DateOnly date,
                 [FromQuery] int pageSize = 10,
                 [FromQuery] int pageIndex = 0)
@@ -128,21 +105,9 @@ namespace Dsw2026Tpi.Api.Controllers
 
         [HttpGet("search")]
         [Authorize(Policy = Policies.AdminPolicy)]
-        [ProducesResponseType(
-            typeof(Pagination<AppointmentModel.Response>),
-            StatusCodes.Status200OK)]
-        [ProducesResponseType(
-            StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(
-            StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(
-            StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(
-            StatusCodes.Status404NotFound)]
-        public async Task<
-            ActionResult<
-                Pagination<AppointmentModel.Response>>>
-            Search(
+        [ProducesResponseType(typeof(Pagination<AppointmentModel.Response>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> Search(
                 [FromQuery] int pageSize = 10,
                 [FromQuery] int pageIndex = 0,
                 [FromQuery] Guid? specialtyId = null,

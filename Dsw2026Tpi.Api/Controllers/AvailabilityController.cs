@@ -6,9 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Dsw2026Tpi.Api.Controllers
 {
-
-    [Authorize(Policy = Policies.AdminPolicy)]
     [Route("api/availabilities")]
+    [Authorize(Policy = Policies.AdminPolicy)]
  
     public class AvailabilityController : AppController
     {
@@ -19,7 +18,7 @@ namespace Dsw2026Tpi.Api.Controllers
             _availabilityService = availabilityService;
         }
 
-       
+
         [HttpPost]
         [ProducesResponseType(typeof(AvailabilityModel.Response), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -27,8 +26,7 @@ namespace Dsw2026Tpi.Api.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<AvailabilityModel.Response>> CreateAvailability([FromBody] AvailabilityModel.Request request)
+        public async Task<IActionResult> CreateAvailability([FromBody] AvailabilityModel.Request request)
         {
             var result = await _availabilityService.CreateAvailabilityAsync(request);
             return StatusCode( StatusCodes.Status201Created, result);
@@ -42,8 +40,8 @@ namespace Dsw2026Tpi.Api.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<AvailabilityModel.Response>> UpdateAvailability([FromBody] AvailabilityModel.Request request)
+        public async Task<IActionResult> UpdateAvailability(
+            [FromBody] AvailabilityModel.Request request)
         {
             var result = await _availabilityService.UpdateAvailabilityAsync(request);
             return Ok(result);

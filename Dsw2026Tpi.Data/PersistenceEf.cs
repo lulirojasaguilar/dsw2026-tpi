@@ -14,17 +14,26 @@ public class PersistenceEf : IPersistence
         _context = context;
     }
 
-    public async Task<T> Add<T>(T entity) where T : EntityBase
+    public async Task<T> Add<T>(
+        T entity) 
+        where T : EntityBase
     {
         await _context.AddAsync(entity);
         return entity;
     }
 
     public async Task AddRange<T>(
-    IEnumerable<T> entities)
-    where T : EntityBase
+        IEnumerable<T> entities)
+        where T : EntityBase
     {
         await _context.Set<T>().AddRangeAsync(entities);
+    }
+    public Task<T> Update<T>(
+        T entity)
+        where T : EntityBase
+    {
+        _context.Update(entity);
+        return Task.FromResult(entity);
     }
 
     public Task UpdateRange<T>(
@@ -35,6 +44,14 @@ public class PersistenceEf : IPersistence
         return Task.CompletedTask;
     }
 
+    public Task<T> Delete<T>(
+        T entity)
+        where T : EntityBase
+    {
+        _context.Remove(entity);
+        return Task.FromResult(entity);
+    }
+
     public async Task<int> SaveChangesAsync()
     {
         return await _context.SaveChangesAsync();
@@ -43,54 +60,65 @@ public class PersistenceEf : IPersistence
     public async Task ExecuteInTransactionAsync(
         Func<Task> operation)
     {
-        await using var transaction =
-            await _context.Database.BeginTransactionAsync();
+        ArgumentNullException.ThrowIfNull(operation);
 
-        try
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
         {
-            await operation();
-            await transaction.CommitAsync();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                await operation();
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        });
     }
 
-    public Task<T> Delete<T>(T entity) where T : EntityBase
-    {
-        _context.Remove(entity);
-        return Task.FromResult(entity);
-    }
-
-    public async Task<T?> First<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase
+    public async Task<T?> First<T>(
+        Expression<Func<T, bool>> 
+        predicate, params string[] include) 
+        where T : EntityBase
     {
         return await Include(_context.Set<T>(), include).FirstOrDefaultAsync(predicate);
     }
 
-    public async Task<IEnumerable<T>?> GetAll<T>(params string[] include) where T : EntityBase
+    public async Task<IEnumerable<T>?> GetAll<T>(
+        params string[] include) 
+        where T : EntityBase
     {
         return await Include(_context.Set<T>(), include).ToListAsync();
     }
 
-    public async Task<T?> GetById<T>(Guid id, params string[] include) where T : EntityBase
+    public async Task<T?> GetById<T>(
+        Guid id, 
+        params string[] include) 
+        where T : EntityBase
     {
         return await Include(_context.Set<T>(), include).FirstOrDefaultAsync(e => e.Id == id);
     }
 
-    public async Task<IEnumerable<T>?> GetFiltered<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase
+    public async Task<IEnumerable<T>?> GetFiltered<T>(
+        Expression<Func<T, bool>> predicate, 
+        params string[] include) 
+        where T : EntityBase
     {
         return await Include(_context.Set<T>(), include).Where(predicate).ToListAsync();
     }
 
-    public Task<T> Update<T>(T entity) where T : EntityBase
-    {
-        _context.Update(entity);
-        return Task.FromResult(entity);
-    }
-
-    public async Task<Pagination<T>> Paginate<T, TKey>(int pageSize, int pageIndex, Expression<Func<T, bool>> predicate, Expression<Func<T, TKey>> sortOrder, params string[] includes) where T : EntityBase
+    public async Task<Pagination<T>> Paginate<T, TKey>(
+        int pageSize, 
+        int pageIndex, 
+        Expression<Func<T, bool>> predicate, 
+        Expression<Func<T, TKey>> sortOrder, 
+        params string[] includes) 
+        where T : EntityBase
     {
         pageSize = Math.Abs(pageSize);
         pageIndex = Math.Abs(pageIndex) == 0 ? 0 : Math.Abs(pageIndex) - 1;
@@ -104,11 +132,16 @@ public class PersistenceEf : IPersistence
 
         async Task<Pagination<T>> GetPage(int skip, int take)
         {
-            var data = await filtered.Skip(skip)
-                    .Take(take)
-                    .ToListAsync();
+            var data = await filtered
+               .Skip(skip)
+               .Take(take)
+               .ToListAsync();
 
-            return new Pagination<T>(pageSize, pageIndex, total, data);
+            return new Pagination<T>(
+                pageSize, 
+                pageIndex, 
+                total, 
+                data);
         }
 
         //la pagina existe
@@ -138,7 +171,10 @@ public class PersistenceEf : IPersistence
         }
     }
 
-    private static IQueryable<T> Include<T>(IQueryable<T> query, string[] includes) where T : EntityBase
+    private static IQueryable<T> Include<T>(
+        IQueryable<T> query, 
+        string[] includes) 
+        where T : EntityBase
     {
         var includedQuery = query;
 

@@ -123,7 +123,7 @@
   <data name="AUTHORIZATION_FAILED" xml:space="preserve">
     <value>Se requieren permisos para la operación solicitada</value>
   </data>
-  <data name="ENTITY_NOTFOUND" xml:space="preserve">
+  <data name="ENTITY_NOT_FOUND" xml:space="preserve">
     <value>La entidad {0} no se encontró</value>
   </data>
   <data name="REGISTER_USER_CONFLICT" xml:space="preserve">
@@ -143,5 +143,47 @@
   </data>
   <data name="APPOINTMENT_CONFLICT" xml:space="preserve">
     <value>No se puede realizar la operación porque existen turnos reservados o bloqueados</value>
+  </data>
+  <data name="DOCTOR_NOT_FOUND" xml:space="preserve">
+    <value>El médico indicado no existe</value>
+  </data>
+  <data name="SPECIALITY_NOT_FOUND" xml:space="preserve">
+    <value>La especialidad indicada no existe</value>
+  </data>
+  <data name="PATIENT_NOT_FOUND" xml:space="preserve">
+    <value>El paciente indicado no existe</value>
+  </data>
+  <data name="AVAILABILITY_NOT_FOUND" xml:space="preserve">
+    <value>El turno indicado no existe</value>
+  </data>
+  <data name="APPOINTMENT_NOT_FOUND" xml:space="preserve">
+    <value>El turno indicado no existe</value>
+  </data>
+  <data name="APPOINTMENT_NOT_CANCELLABLE" xml:space="preserve">
+    <value>Solo se pueden cancelar turnos en estado BOOKED</value>
+  </data>
+  <data name="SLOT_NOT_AVAILABLE" xml:space="preserve">
+    <value>El turno seleccionado ya no está disponible</value>
+  </data>
+  <data name="DUPLICATE_SPECIALTY_NAME" xml:space="preserve">
+    <value>Ya existe una especialidad activa con ese nombre</value>
+  </data>
+  <data name="INVALID_REQUEST_FORMAT" xml:space="preserve">
+    <value>La solicitud tiene un formato inválido o faltan parámetros obligatorios</value>
+  </data>
+  <data name="PAST_DATETIME_NOT_ALLOWED" xml:space="preserve">
+    <value>No se pueden reservar turnos en fechas u horarios pasados</value>
+  </data>
+  <data name="PATIENT_MISMATCH" xml:space="preserve">
+    <value>El recurso solicitado no pertenece al paciente autenticado</value>
+  </data>
+  <data name="RATE_LIMIT_EXCEEDED" xml:space="preserve">
+    <value>Se superó el límite de solicitudes permitidas, intente nuevamente en unos instantes</value>
+  </data>
+  <data name="APPOINTMENT_NOT_UPDATABLE" xml:space="preserve">
+    <value>Solo se puede cerrar un turno que está en estado BOOKED</value>
+  </data>
+  <data name="INVALID_APPOINTMENT_STATUS" xml:space="preserve">
+    <value>El estado indicado no es válido para esta operación: use ATTENDED o NO_SHOW</value>
   </data>
 </root>

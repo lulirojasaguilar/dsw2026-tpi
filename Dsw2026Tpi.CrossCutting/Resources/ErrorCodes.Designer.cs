@@ -70,6 +70,33 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         }
         
         /// <summary>
+        ///   Busca una cadena traducida similar a Solo se pueden cancelar turnos en estado BOOKED.
+        /// </summary>
+        public static string APPOINTMENT_NOT_CANCELLABLE {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_NOT_CANCELLABLE", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a El turno indicado no existe.
+        /// </summary>
+        public static string APPOINTMENT_NOT_FOUND {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_NOT_FOUND", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a Solo se puede cerrar un turno que está en estado BOOKED.
+        /// </summary>
+        public static string APPOINTMENT_NOT_UPDATABLE {
+            get {
+                return ResourceManager.GetString("APPOINTMENT_NOT_UPDATABLE", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Busca una cadena traducida similar a Usuario o contraseña incorrectos.
         /// </summary>
         public static string AUTHENTICATION_FAILED {
@@ -88,11 +115,92 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         }
         
         /// <summary>
+        ///   Busca una cadena traducida similar a El turno indicado no existe.
+        /// </summary>
+        public static string AVAILABILITY_NOT_FOUND {
+            get {
+                return ResourceManager.GetString("AVAILABILITY_NOT_FOUND", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a El médico indicado no existe.
+        /// </summary>
+        public static string DOCTOR_NOT_FOUND {
+            get {
+                return ResourceManager.GetString("DOCTOR_NOT_FOUND", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a Ya existe una especialidad activa con ese nombre.
+        /// </summary>
+        public static string DUPLICATE_SPECIALTY_NAME {
+            get {
+                return ResourceManager.GetString("DUPLICATE_SPECIALTY_NAME", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Busca una cadena traducida similar a La entidad {0} no se encontró.
         /// </summary>
-        public static string ENTITY_NOTFOUND {
+        public static string ENTITY_NOT_FOUND {
             get {
-                return ResourceManager.GetString("ENTITY_NOTFOUND", resourceCulture);
+                return ResourceManager.GetString("ENTITY_NOT_FOUND", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a El estado indicado no es válido para esta operación: use ATTENDED o NO_SHOW.
+        /// </summary>
+        public static string INVALID_APPOINTMENT_STATUS {
+            get {
+                return ResourceManager.GetString("INVALID_APPOINTMENT_STATUS", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a La solicitud tiene un formato inválido o faltan parámetros obligatorios.
+        /// </summary>
+        public static string INVALID_REQUEST_FORMAT {
+            get {
+                return ResourceManager.GetString("INVALID_REQUEST_FORMAT", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a No se pueden reservar turnos en fechas u horarios pasados.
+        /// </summary>
+        public static string PAST_DATETIME_NOT_ALLOWED {
+            get {
+                return ResourceManager.GetString("PAST_DATETIME_NOT_ALLOWED", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a El recurso solicitado no pertenece al paciente autenticado.
+        /// </summary>
+        public static string PATIENT_MISMATCH {
+            get {
+                return ResourceManager.GetString("PATIENT_MISMATCH", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a El paciente indicado no existe.
+        /// </summary>
+        public static string PATIENT_NOT_FOUND {
+            get {
+                return ResourceManager.GetString("PATIENT_NOT_FOUND", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a Se superó el límite de solicitudes permitidas, intente nuevamente en unos instantes.
+        /// </summary>
+        public static string RATE_LIMIT_EXCEEDED {
+            get {
+                return ResourceManager.GetString("RATE_LIMIT_EXCEEDED", resourceCulture);
             }
         }
         
@@ -120,6 +228,24 @@ namespace Dsw2026Tpi.CrossCutting.Resources {
         public static string SCHEDULE_OVERLAP {
             get {
                 return ResourceManager.GetString("SCHEDULE_OVERLAP", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a El turno seleccionado ya no está disponible.
+        /// </summary>
+        public static string SLOT_NOT_AVAILABLE {
+            get {
+                return ResourceManager.GetString("SLOT_NOT_AVAILABLE", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a La especialidad indicada no existe.
+        /// </summary>
+        public static string SPECIALITY_NOT_FOUND {
+            get {
+                return ResourceManager.GetString("SPECIALITY_NOT_FOUND", resourceCulture);
             }
         }
         

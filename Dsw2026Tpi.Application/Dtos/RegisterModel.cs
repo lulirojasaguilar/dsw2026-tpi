@@ -1,7 +1,9 @@
-﻿namespace Dsw2026Tpi.Application.Dtos;
-
-public record RegisterModel
+﻿namespace Dsw2026Tpi.Application.Dtos
 {
-    public record Request(string Email, string Password);
-    public record Response(string Email);
+    public record RegisterModel
+    {
+        public record Request(string Email, string Password);
+
+        public record Response(string Email);
+    }
 }

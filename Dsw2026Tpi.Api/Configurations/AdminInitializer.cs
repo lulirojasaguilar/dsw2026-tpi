@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity;
 
 namespace Dsw2026Tpi.Api.Configurations
 {
-    public class AdminInitializer
+    public static class AdminInitializer
     {
         public static async Task InitializeAdminAsync(
             IServiceProvider serviceProvider,
@@ -16,32 +16,26 @@ namespace Dsw2026Tpi.Api.Configurations
 				scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
 			var roleManager =
-				scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+				scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
-			var adminEmail = configuration["Admin:Email"]
+            if (!await roleManager.RoleExistsAsync(Roles.Administrator))
+            {
+                var createRoleResult = await roleManager.CreateAsync(new IdentityRole<Guid>(Roles.Administrator));
+
+                if (!createRoleResult.Succeeded)
+                {
+                    var errors = string.Join("; ", createRoleResult.Errors.Select(e => e.Description));
+                    throw new InvalidOperationException($"No se pudo crear el rol Administrador: {errors}");
+                }
+            }
+
+            var adminEmail = configuration["Admin:Email"]
 				?? throw new InvalidOperationException(
 					"No se configuró Admin:Email.");
 
 			var adminPassword = configuration["Admin:Password"]
 				?? throw new InvalidOperationException(
 					"No se configuró Admin:Password.");
-
-            if (!await roleManager.RoleExistsAsync(Roles.Administrator))
-            {
-                var createRoleResult = await roleManager.CreateAsync(
-                          new IdentityRole(Roles.Administrator));
-
-                if (!createRoleResult.Succeeded)
-                {
-                    var errors = string.Join(
-                        "; ",
-                        createRoleResult.Errors.Select(
-                            error => error.Description));
-
-                    throw new InvalidOperationException(
-                        $"No se pudo crear el rol Administrador: {errors}");
-                }
-            }
 
 			var admin = await userManager.FindByEmailAsync(adminEmail);
 
@@ -50,18 +44,22 @@ namespace Dsw2026Tpi.Api.Configurations
 				return;
 			}
 
+            var now = DateTime.UtcNow;
+
             admin = new ApplicationUser
             {
                 UserName = adminEmail,
                 Email = adminEmail,
                 EmailConfirmed = true,
                 Deleted = false,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
 			var creationResult =
-				await userManager.CreateAsync(admin, adminPassword);
+				await userManager.CreateAsync(
+					admin, 
+					adminPassword);
 
 			if (!creationResult.Succeeded)
 			{

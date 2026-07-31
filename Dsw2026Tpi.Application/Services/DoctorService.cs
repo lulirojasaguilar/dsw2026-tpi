@@ -17,7 +17,11 @@ public class DoctorService : IDoctorService
         _persistence = persistence;
     }
 
-    public async Task<Pagination<DoctorModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null, Guid? specialtyId = null)
+    public async Task<Pagination<DoctorModel.Response>> GetAll(
+        int pageSize, 
+        int pageIndex, 
+        string? name = null, 
+        Guid? specialtyId = null)
     {
         if (pageSize <= 0)
         {
@@ -35,10 +39,8 @@ public class DoctorService : IDoctorService
                 .WithDetail("pageIndex", "No puede ser negativo.");
         }
 
-        var normalizedName = name?.Trim();
-
-        if (!string.IsNullOrWhiteSpace(normalizedName) &&
-           (normalizedName.Length < 3 || normalizedName.Length > 100))
+        if (!string.IsNullOrWhiteSpace(name) &&
+            (name.Length < 3 || name.Length > 100))
         {
             throw new ValidationException(
                 "El filtro por nombre debe tener entre 3 y 100 caracteres.",
@@ -46,43 +48,25 @@ public class DoctorService : IDoctorService
                 .WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
         }
 
-        if (specialtyId.HasValue)
-        {
-            if (specialtyId.Value == Guid.Empty)
-            {
-                throw new ValidationException(
-                    "El identificador de la especialidad no es válido.",
-                    nameof(ErrorCodes.VALIDATION_ERROR))
-                    .WithDetail(
-                        "specialtyId",
-                        "Debe indicar un identificador válido.");
-            }
+        var normalizedName = name?.Trim();
 
-            var speciality =
-                await _persistence.GetById<Speciality>(
-                    specialtyId.Value);
-
-            if (speciality is null || speciality.Deleted)
-            {
-                throw new EntityNotFoundException("Speciality");
-            }
-        }
-
-        var doctors = await _persistence.Paginate<Doctor, string>(
-            pageSize, pageIndex,
-            d => !d.Deleted && (string.IsNullOrWhiteSpace(normalizedName) || d.Name.Contains(normalizedName)) &&
-            (!specialtyId.HasValue ||
-            d.SpecialityId == specialtyId.Value),
+        var page = await _persistence.Paginate<Doctor, string>(
+            pageSize, 
+            pageIndex,
+            d => !d.Deleted 
+            && (string.IsNullOrWhiteSpace(normalizedName) || 
+            d.Name.Contains(normalizedName)) &&
+            (specialtyId==null ||
+            d.SpecialityId == specialtyId),
             d => d.Name,
             nameof(Doctor.Speciality));
 
-        return doctors.Map(d => new DoctorModel.Response(d.Id, d.Name, d.LicenseNumber, new DoctorModel.SpecialityDto(d.Speciality.Id, d.Speciality.Name)));
+        return page.Map(Map);
     }
 
-    public async Task<DoctorModel.Response> Create(DoctorModel.Request request)
+    public async Task<DoctorModel.Response> Create(
+        DoctorModel.Request request)
     {
-        ValidateRequest(request);
-
         var speciality = await _persistence.GetById<Speciality>(request.SpecialityId);
 
         if (speciality is null || speciality.Deleted)
@@ -90,53 +74,25 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException("Speciality");
         }
 
-        var normalizedName = request.Name.Trim();
+        var doctor = new Doctor(request.Name, request.LicenseNumber, speciality);
 
-        var normalizedLicenseNumber = request.LicenseNumber.Trim();
+        var now = DateTime.UtcNow;
+        doctor.CreatedAt = now;
+        doctor.UpdatedAt = now;
 
-        var existingDoctor = await _persistence.First<Doctor>(
-                doctor =>
-                          !doctor.Deleted &&
-                           doctor.LicenseNumber == normalizedLicenseNumber);
-
-        if (existingDoctor is not null)
-        {
-            throw new BusinessRuleException(
-                "Ya existe un médico con esa matrícula.",
-                "DUPLICATE_LICENSE_NUMBER")
-                .WithDetail(
-                    "licenseNumber",
-                    "La matrícula ya se encuentra registrada.");
-        }
-
-        var doctor = new Doctor(
-            normalizedName,
-            normalizedLicenseNumber,
-            speciality);
-
-        var createdDoctor = await _persistence.Add(doctor);
-
+        await _persistence.Add(doctor);
         await _persistence.SaveChangesAsync();
 
-        return new DoctorModel.Response(createdDoctor.Id, createdDoctor.Name, createdDoctor.LicenseNumber, new DoctorModel.SpecialityDto(speciality.Id, speciality.Name));
+        return Map(doctor);
     }
-    public async Task<DoctorModel.Response> Update(Guid id, DoctorModel.Request request)
+    public async Task<DoctorModel.Response> Update(
+        Guid id, 
+        DoctorModel.Request request)
     {
-        ValidateRequest(request);
+        var doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality))
+            ?? throw new EntityNotFoundException("Doctor");
 
-        if (id == Guid.Empty)
-        {
-            throw new ValidationException(
-                "El identificador del médico es obligatorio.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail(
-                    "id",
-                    "Debe indicar un identificador válido.");
-        }
-
-        var doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality));
-
-        if (doctor is null || doctor.Deleted)
+        if (doctor.Deleted)
         {
             throw new EntityNotFoundException("Doctor");
         }
@@ -148,190 +104,84 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException("Speciality");
         }
 
-        var normalizedName = request.Name.Trim();
+        doctor.Update(request.Name, request.LicenseNumber, speciality);
+        doctor.UpdatedAt = DateTime.UtcNow;
 
-        var normalizedLicenseNumber = request.LicenseNumber.Trim();
-
-        var existingDoctor = await _persistence.First<Doctor>(
-            otherDoctor =>
-                             otherDoctor.Id != id &&
-                            !otherDoctor.Deleted &&
-                             otherDoctor.LicenseNumber == normalizedLicenseNumber);
-
-        if (existingDoctor is not null)
-        {
-            throw new BusinessRuleException(
-                "Ya existe otro médico con esa matrícula.",
-                "DUPLICATE_LICENSE_NUMBER")
-                .WithDetail(
-                    "licenseNumber",
-                    "La matrícula ya se encuentra registrada.");
-        }
-
-        doctor.Update(
-            normalizedName,
-            normalizedLicenseNumber,
-            speciality);
-
-        var updatedDoctor = await _persistence.Update(doctor);
-
+        await _persistence.Update(doctor);
         await _persistence.SaveChangesAsync();
 
-        return new DoctorModel.Response(updatedDoctor.Id, updatedDoctor.Name, updatedDoctor.LicenseNumber, new DoctorModel.SpecialityDto(speciality.Id, speciality.Name));
+        return Map(doctor);
     }
 
     public async Task Delete(Guid id)
     {
+        var doctor = await _persistence.GetById<Doctor>(id)
+          ?? throw new EntityNotFoundException("Doctor");
 
-        if (id == Guid.Empty)
-        {
-            throw new ValidationException(
-                "El identificador del médico es obligatorio.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail(
-                    "id",
-                    "Debe indicar un identificador válido.");
-        }
-
-        var doctor = await _persistence.GetById<Doctor>(id);
-
-        if (doctor is null || doctor.Deleted)
+        if (doctor.Deleted)
         {
             throw new EntityNotFoundException("Doctor");
         }
 
         doctor.Delete();
+        doctor.UpdatedAt = DateTime.UtcNow;
 
         await _persistence.Update(doctor);
-
         await _persistence.SaveChangesAsync();
+
     }
 
     public async Task<IReadOnlyCollection<DoctorModel.AvailabilityResponse>>
-        GetAvailabilities(Guid doctorId)
+        GetAvailabilities(
+        Guid doctorId, 
+        byte? month = null, 
+        short? year = null)
     {
+        await EnsureDoctorExists(doctorId);
 
-        if (doctorId == Guid.Empty)
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var targetMonth = month ?? (byte)today.Month;
+        var targetYear = year ?? (short)today.Year;
+
+        if (targetMonth is < 1 or > 12)
         {
             throw new ValidationException(
-                "El identificador del médico es obligatorio.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail(
-                    "doctorId",
-                    "Debe indicar un identificador válido.");
+                "El mes indicado no es válido: debe estar entre 1 y 12.",
+                nameof(ErrorCodes.VALIDATION_ERROR));
         }
 
+        var rules = await _persistence.GetFiltered<AvailabilityRule>(
+            rule =>
+                rule.DoctorId == doctorId 
+                && !rule.Deleted
+                && rule.Month == targetMonth
+                && rule.Year == targetYear);
+
+        return (rules ?? [])
+            .OrderBy(rule => rule.DayOfWeek)
+            .ThenBy(rule => rule.StartTime)
+            .Select(rule => new DoctorModel.AvailabilityResponse(
+                rule.Id,
+                AvailabilityGenerator.DayName(rule.DayOfWeek),
+                rule.StartTime.ToString(@"hh\:mm"),
+                rule.EndTime.ToString(@"hh\:mm")))
+            .ToList();
+    }
+
+    private static DoctorModel.Response Map(Doctor doctor) => new(
+       doctor.Id,
+       doctor.Name,
+       doctor.LicenseNumber,
+       new DoctorModel.SpecialityDto(doctor.Speciality.Id, doctor.Speciality.Name));
+
+    private async Task EnsureDoctorExists(Guid doctorId)
+    {
         var doctor = await _persistence.GetById<Doctor>(doctorId);
 
         if (doctor is null || doctor.Deleted)
         {
             throw new EntityNotFoundException("Doctor");
         }
-
-        var currentDate = DateOnly.FromDateTime(DateTime.Today);
-
-        var rules = await _persistence.GetFiltered<AvailabilityRule>(
-            rule =>
-                rule.DoctorId == doctorId &&
-                rule.Month == currentDate.Month &&
-                rule.Year == currentDate.Year &&
-                !rule.Deleted);
-
-        if (rules is null || !rules.Any())
-        {
-            return Array.Empty<DoctorModel.AvailabilityResponse>();
-        }
-
-        return rules
-            .OrderBy(rule => rule.DayOfWeek)
-            .ThenBy(rule => rule.StartTime)
-            .Select(rule => new DoctorModel.AvailabilityResponse(
-                GetDayName(rule.DayOfWeek),
-                rule.StartTime.ToString(@"hh\:mm"),
-                rule.EndTime.ToString(@"hh\:mm")))
-            .ToList();
     }
-
-    private static void ValidateRequest(DoctorModel.Request request)
-    {
-        if (request is null)
-        {
-            throw new ValidationException(
-                "La solicitud es obligatoria.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail(
-                    "request",
-                    "Debe enviar los datos del médico.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Name))
-        {
-            throw new ValidationException(
-                "El nombre es obligatorio.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail("name", "El nombre es obligatorio.");
-        }
-
-        var normalizedName = request.Name.Trim();
-
-        if (normalizedName.Length < 3 || normalizedName.Length > 100)
-        {
-            throw new ValidationException(
-                "El nombre debe tener entre 3 y 100 caracteres.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.LicenseNumber))
-        {
-            throw new ValidationException(
-                "La matrícula es obligatoria.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail(
-                    "licenseNumber",
-                    "La matrícula es obligatoria.");
-        }
-
-        var normalizedLicenseNumber =
-            request.LicenseNumber.Trim();
-
-        if (normalizedLicenseNumber.Length > 50)
-        {
-            throw new ValidationException(
-                "La matrícula no puede superar los 50 caracteres.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail(
-                    "licenseNumber",
-                    "No puede superar los 50 caracteres.");
-        }
-
-        if (request.SpecialityId == Guid.Empty)
-        {
-            throw new ValidationException(
-                "La especialidad es obligatoria.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail(
-                    "specialityId",
-                    "Debe indicar una especialidad válida.");
-        }
-    }
-
-    private static string GetDayName(byte dayOfWeek)
-    {
-        return dayOfWeek switch
-        {
-            0 => "LUNES",
-            1 => "MARTES",
-            2 => "MIÉRCOLES",
-            3 => "JUEVES",
-            4 => "VIERNES",
-            5 => "SÁBADO",
-            6 => "DOMINGO",
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(dayOfWeek),
-                dayOfWeek,
-                "Día no válido.")
-        };
-    }
-
 }
+
