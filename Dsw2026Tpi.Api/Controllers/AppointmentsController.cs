@@ -3,7 +3,6 @@ using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.CrossCutting.Identity;
-using Dsw2026Tpi.CrossCutting.Models;
 using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -65,7 +64,7 @@ namespace Dsw2026Tpi.Api.Controllers
 
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = Policies.PatientPolicy)]
-        [ProducesResponseType(typeof(SuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -82,7 +81,7 @@ namespace Dsw2026Tpi.Api.Controllers
                 id,
                 patientId);
 
-            return Ok(new SuccessResponse());
+            return Content("ok", "text/plain");
         }
 
         [HttpGet]

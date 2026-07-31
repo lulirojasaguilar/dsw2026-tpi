@@ -3,9 +3,9 @@
 public record DoctorModel
 {
     public record Request(
-        string Name, 
-        string? LicenseNumber, 
-        Guid SpecialityId);
+        string Name,
+        string? LicenseNumber,
+        Guid SpecialtyId);
 
     public record Response(
         Guid Id, 

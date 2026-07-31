@@ -67,7 +67,7 @@ public class DoctorService : IDoctorService
     public async Task<DoctorModel.Response> Create(
         DoctorModel.Request request)
     {
-        var speciality = await _persistence.GetById<Speciality>(request.SpecialityId);
+        var speciality = await _persistence.GetById<Speciality>(request.SpecialtyId);
 
         if (speciality is null || speciality.Deleted)
         {
@@ -97,7 +97,7 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException("Doctor");
         }
 
-        var speciality = await _persistence.GetById<Speciality>(request.SpecialityId);
+        var speciality = await _persistence.GetById<Speciality>(request.SpecialtyId);
 
         if (speciality is null || speciality.Deleted)
         {

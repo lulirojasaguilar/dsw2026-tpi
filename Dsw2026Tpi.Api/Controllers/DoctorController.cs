@@ -1,7 +1,6 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Identity;
-using Dsw2026Tpi.CrossCutting.Models;
 using Dsw2026Tpi.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -73,7 +72,7 @@ public class DoctorController : AppController
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = Policies.AdminPolicy)]
-    [ProducesResponseType(typeof(SuccessResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -82,7 +81,7 @@ public class DoctorController : AppController
     {
         await _service.Delete(id);
 
-        return Ok(new SuccessResponse());
+        return Content("ok", "text/plain");
     }
 
     [HttpGet("{id:guid}/availabilities")]
