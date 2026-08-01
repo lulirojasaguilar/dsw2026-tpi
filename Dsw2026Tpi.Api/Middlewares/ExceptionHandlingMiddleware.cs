@@ -16,13 +16,16 @@ public class ExceptionHandlingMiddleware
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+    public ExceptionHandlingMiddleware(
+        RequestDelegate next, 
+        ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(
+        HttpContext context)
     {
         try
         {
@@ -35,22 +38,24 @@ public class ExceptionHandlingMiddleware
         }
     }
 
-    private async Task HandleExceptionAsync(HttpContext context, Exception ex)
+    private static async Task HandleExceptionAsync(
+        HttpContext context, 
+        Exception ex)
     {
-        ErrorResponse error = ex is AppException exApp ? 
-            exApp.Error : 
-            new ErrorResponse(nameof(ErrorCodes.UNHANDLED_ERROR), ErrorCodes.UNHANDLED_ERROR);
-        
+        var error = ex is AppException appEx
+           ? appEx.Error
+           : new ErrorResponse(nameof(ErrorCodes.UNHANDLED_ERROR), ErrorCodes.UNHANDLED_ERROR);
+
         var status = ex switch
         {
             ValidationException => HttpStatusCode.BadRequest,
             EntityNotFoundException => HttpStatusCode.NotFound,
-            ConflictException => HttpStatusCode.Conflict,
-            BusinessRuleException => HttpStatusCode.Conflict,
-            AuthenticationException => HttpStatusCode.Unauthorized,
-            AuthorizationException => HttpStatusCode.Forbidden,
+            AuthenticationException => HttpStatusCode.Unauthorized,      // corregido: 401
+            AuthorizationException => HttpStatusCode.Forbidden,          // corregido: 403
+            ConflictException or BusinessRuleException => HttpStatusCode.Conflict,
             _ => HttpStatusCode.InternalServerError,
         };
+
         var result = JsonSerializer.Serialize(error, JsonOptions);
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = (int)status;

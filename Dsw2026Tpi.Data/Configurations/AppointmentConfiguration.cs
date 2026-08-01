@@ -1,4 +1,5 @@
-﻿using Dsw2026Tpi.Domain.Entities;
+﻿using Dsw2026Tpi.Domain.Constants;
+using Dsw2026Tpi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -9,54 +10,62 @@ namespace Dsw2026Tpi.Data.Configurations
     {
         public void Configure(EntityTypeBuilder<Appointment> builder)
         {
-            builder.ToTable("Appointment", table =>
+            builder.ToTable("Appointments", table =>
             {
                 table.HasCheckConstraint(
                     "CK_Appointment_Status",
-                    "[Status] IN ('BOOKED', 'CANCELLED', 'ATTENDED', 'NO_SHOW')");
+                    $"[Status] IN (" +
+                    $"'{AppointmentStatuses.Booked}', " +
+                    $"'{AppointmentStatuses.Cancelled}', " +
+                    $"'{AppointmentStatuses.Attended}', " +
+                    $"'{AppointmentStatuses.NoShow}')");
             });
 
-            builder.HasKey(x => x.Id);
+            builder.HasKey(appointment => appointment.Id);
 
-            builder.Property(x => x.DoctorId)
+            builder.Property(appointment => appointment.Reason)
+                .IsRequired()
+                .HasMaxLength(300);
+
+            builder.Property(appointment => appointment.Status)
+                .IsRequired()
+                .HasMaxLength(20);
+
+            builder.Property(appointment => appointment.CancelledAt);
+
+            builder.Property(appointment => appointment.AttendedAt);
+
+            builder.Property(appointment => appointment.CreatedAt)
                 .IsRequired();
 
-            builder.Property(x => x.AvailabilityId)
+            builder.Property(appointment => appointment.UpdatedAt)
                 .IsRequired();
 
-            builder.Property(x => x.PatientId)
-                .IsRequired();
-
-            builder.Property(x => x.Reason)
-                .HasMaxLength(500)
-                .IsRequired();
-
-            builder.Property(x => x.Status)
-                .HasMaxLength(20)
-                .IsRequired();
-
-            builder.Property(x => x.CancelledAt)
-                .IsRequired(false);
-
-            builder.HasOne<Doctor>()
+            builder.HasOne(appointment => appointment.AvailabilitySlot)
                 .WithMany()
-                .HasForeignKey(x => x.DoctorId)
+                .HasForeignKey(appointment => appointment.AvailabilitySlotId)
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasOne<AvailabilitySlot>()
+            builder.HasOne(appointment => appointment.Patient)
                 .WithMany()
-                .HasForeignKey(x => x.AvailabilityId)
+                .HasForeignKey(appointment => appointment.PatientId)
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasOne<Patient>()
+            builder.HasOne(appointment => appointment.Doctor)
                 .WithMany()
-                .HasForeignKey(x => x.PatientId)
+                .HasForeignKey(appointment => appointment.DoctorId)
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasIndex(x => x.AvailabilityId)
+            builder.HasIndex(appointment => appointment.AvailabilitySlotId)
                 .IsUnique()
-                .HasDatabaseName("UX_Appointment_AvailabilityId_Booked")
-                .HasFilter("[Status] = 'BOOKED'");
+                .HasFilter(
+                    $"[Status] = '{AppointmentStatuses.Booked}'")
+                .HasDatabaseName(
+                    "UX_Appointments_AvailabilitySlotId_Booked");
+
         }
     }
 }

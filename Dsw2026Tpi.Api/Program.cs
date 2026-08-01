@@ -1,7 +1,8 @@
 using Dsw2026Tpi.Api.Configurations;
 using Dsw2026Tpi.Api.Middlewares;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.CrossCutting.Resources;
+using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
 namespace Dsw2026Tpi.Api;
@@ -28,9 +29,33 @@ public class Program
             builder.Services.AddSwaggerConfiguration();
             builder.Services.AddApplicationPersistence(builder.Configuration);
             builder.Services.AddAppCors(builder.Configuration);
+            builder.Services.AddAppRateLimiting(builder.Configuration);
             builder.Services.AddAppDependencies();
-            builder.Services.AddControllers();
             builder.Services.AddHealthChecks();
+
+            builder.Services.AddControllers();
+
+            builder.Services.Configure<ApiBehaviorOptions>(options =>
+            {
+                options.InvalidModelStateResponseFactory = context =>
+                {
+                    var error = new ErrorResponse(nameof(ErrorCodes.VALIDATION_ERROR), ErrorCodes.VALIDATION_ERROR);
+
+                    foreach (var (field, entry) in context.ModelState)
+                    {
+                        foreach (var modelError in entry.Errors)
+                        {
+                            var issue = string.IsNullOrWhiteSpace(modelError.ErrorMessage)
+                                ? "Valor inválido o faltante."
+                                : modelError.ErrorMessage;
+
+                            error.AddDetail(field, issue);
+                        }
+                    }
+
+                    return new BadRequestObjectResult(error);
+                };
+            });
 
             var app = builder.Build();
 
@@ -54,6 +79,7 @@ public class Program
             
             app.UseCors();
             app.UseAuthentication();
+            app.UseRateLimiter();
             app.UseAuthorization();
 
 

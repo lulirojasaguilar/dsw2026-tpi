@@ -1,4 +1,5 @@
-﻿using Dsw2026Tpi.Domain.Entities;
+﻿using Dsw2026Tpi.Domain.Constants;
+using Dsw2026Tpi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -10,7 +11,7 @@ namespace Dsw2026Tpi.Data.Configurations
         public void Configure(EntityTypeBuilder<AvailabilitySlot> builder)
         {
 
-            builder.ToTable("AvailabilitySlot", table =>
+            builder.ToTable("AvailabilitySlots", table =>
             {
                 table.HasCheckConstraint(
                     "CK_AvailabilitySlot_TimeRange",
@@ -18,38 +19,46 @@ namespace Dsw2026Tpi.Data.Configurations
 
                 table.HasCheckConstraint(
                     "CK_AvailabilitySlot_Status",
-                    "[Status] IN ('AVAILABLE', 'BOOKED', 'BLOCKED')");
+                    $"[Status] IN (" +
+                    $"'{AvailabilityStatuses.Available}', " +
+                    $"'{AvailabilityStatuses.Booked}', " +
+                    $"'{AvailabilityStatuses.Blocked}')");
             });
 
-            builder.HasKey(x => x.Id);
+            builder.HasKey(slot => slot.Id);
 
-            builder.Property(x => x.AvailabilityRuleId).IsRequired();
-            
-            builder.Property(x => x.DoctorId).IsRequired();
-            
-            builder.Property(x => x.SlotDate)
-                    .HasColumnType("date")
-                    .IsRequired();
-            
-            builder.Property(x => x.StartTime)
-                     .HasColumnType("time(0)")
-                     .IsRequired();
+            builder.Property(slot => slot.SlotDate)
+                .IsRequired()
+                .HasColumnType("date");
 
-            builder.Property(x => x.EndTime)
-                     .HasColumnType("time(0)")
-                     .IsRequired();
+            builder.Property(slot => slot.StartTime)
+                 .IsRequired()
+                 .HasColumnType("time(0)");
 
-            builder.Property(x => x.Status)
-                     .HasMaxLength(20)
-                     .IsRequired();
-            
-            builder.Property(x => x.Deleted)
+            builder.Property(slot => slot.EndTime)
+                 .IsRequired()
+                 .HasColumnType("time(0)");
+
+            builder.Property(slot => slot.Status)
+                 .IsRequired()
+                 .HasMaxLength(20);
+
+            builder.ToTable(t => t.HasCheckConstraint(
+                "CK_AvailabilitySlots_Status",
+                $"[Status] IN ('" +
+                $"{AvailabilityStatuses.Available}', " +
+                $"'{AvailabilityStatuses.Booked}', " +
+                $"'{AvailabilityStatuses.Blocked}')"));
+
+            builder.Property(slot => slot.Deleted)
                     .HasDefaultValue(false)
+                    .HasColumnName("deleted");
+
+            builder.Property(slot => slot.CreatedAt)
                     .IsRequired();
 
-            builder.Property(x => x.RowVersion)
-                    .IsRowVersion()
-                    .IsConcurrencyToken();
+            builder.Property(slot => slot.UpdatedAt)
+                    .IsRequired();
 
 
             /* Relación compuesta con AvailabilityRule.
@@ -62,29 +71,30 @@ namespace Dsw2026Tpi.Data.Configurations
 
             builder.HasOne<AvailabilityRule>()
                 .WithMany()
-                .HasForeignKey(x => new
+                .HasForeignKey(slot => new
                 {
-                    x.AvailabilityRuleId,
-                    x.DoctorId
+                    slot.AvailabilityRuleId,
+                    slot.DoctorId
                 })
-                .HasPrincipalKey(x => new
+                .HasPrincipalKey(slot => new
                 {
-                    x.Id,
-                    x.DoctorId
+                    slot.Id,
+                    slot.DoctorId
                 })
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
             //Impide crear dos slots activos para el mismo médico, en la misma fecha y en la misma hora de inicio.
 
-            builder.HasIndex(x => new
+            builder.HasIndex(slot => new
             {
-                x.DoctorId,
-                x.SlotDate,
-                x.StartTime
+                slot.DoctorId,
+                slot.SlotDate,
+                slot.StartTime
             })
             .IsUnique()
-            .HasFilter("[Deleted] = 0")
-            .HasDatabaseName("UX_AvailabilitySlot_Doctor_Date_StartTime");
+            .HasFilter("[deleted] = 0")
+            .HasDatabaseName("UX_AvailabilitySlots_Doctor_Date_StartTime");
         }
     }
 }

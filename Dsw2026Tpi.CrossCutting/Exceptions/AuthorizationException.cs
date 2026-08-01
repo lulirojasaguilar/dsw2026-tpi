@@ -8,7 +8,30 @@ namespace Dsw2026Tpi.CrossCutting.Exceptions;
 public class AuthorizationException : AppException
 {
     public AuthorizationException()
-        : base(ErrorCodes.AUTHORIZATION_FAILED, nameof(ErrorCodes.AUTHORIZATION_FAILED))
+        : this(nameof(ErrorCodes.AUTHORIZATION_FAILED))
     {
     }
+
+    public AuthorizationException(string errorCode)
+    : base(
+        GetMessage(errorCode),
+        errorCode)
+    {
+    }
+
+    private static string GetMessage(string errorCode)
+    {
+        return errorCode switch
+        {
+            nameof(ErrorCodes.AUTHORIZATION_FAILED) =>
+                 ErrorCodes.AUTHORIZATION_FAILED,
+
+            nameof(ErrorCodes.PATIENT_MISMATCH) =>
+                 ErrorCodes.PATIENT_MISMATCH,
+
+
+            _ => ErrorCodes.AUTHORIZATION_FAILED
+        };
+    }
+
 }

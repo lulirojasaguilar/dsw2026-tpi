@@ -4,7 +4,7 @@
     {
         public record Request(
             Guid DoctorId,
-            Guid AvailabilityId,
+            Guid AvailabilitySlotId,
             PatientRequestData Patient,
             string Reason
         );
@@ -13,11 +13,31 @@
             long Dni
         );
 
+        public record SpecialityDto(
+            Guid Id, 
+            string Name);
+
+        public record DoctorDto(
+            Guid Id, 
+            string Name, 
+            SpecialityDto Specialty);
+
+        public record PatientDto(
+            Guid Id, 
+            long Dni, 
+            string? FullName);
+
         public record Response(
             Guid Id,
             string Status,
+            string Reason,
             DateOnly Date,
-            TimeSpan StartTime
+            string StartTime,
+            string EndTime,
+            DateTime? CancelledAt,
+            DateTime? AttendedAt,
+            DoctorDto Doctor,
+            PatientDto Patient
         );
     }
 }

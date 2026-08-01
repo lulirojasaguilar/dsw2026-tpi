@@ -4,11 +4,18 @@ using Microsoft.AspNetCore.Identity;
 
 namespace Dsw2026Tpi.Api.Services;
 
-public class SignInService(SignInManager<ApplicationUser> signInManager) : ISignInService
+public class SignInService : ISignInService
 {
+    private readonly SignInManager<ApplicationUser> _signInManager;
+
+    public SignInService(SignInManager<ApplicationUser> signInManager)
+    {
+        _signInManager = signInManager;
+    }
+
     public async Task<bool> CheckPassword(ApplicationUser user, string password)
     {
-        var result = await signInManager.CheckPasswordSignInAsync(user, password, false);
+        var result = await _signInManager.CheckPasswordSignInAsync(user, password, false);
         return result.Succeeded;
     }
 }

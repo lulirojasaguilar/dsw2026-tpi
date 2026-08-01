@@ -1,14 +1,22 @@
 ﻿using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Resources;
+using Dsw2026Tpi.Domain.Constants;
 
 namespace Dsw2026Tpi.Domain.Entities
 {
     public class Appointment : EntityBase
     {
+        public Guid AvailabilitySlotId { get; private set; }
+
+        public AvailabilitySlot AvailabilitySlot { get; private set; } = null!;
+
         public Guid DoctorId { get; private set; }
 
-        public Guid AvailabilityId { get; private set; }
+        public Doctor Doctor { get; private set; } = null!;
 
         public Guid PatientId { get; private set; }
+
+        public Patient Patient { get; private set; } = null!;
 
         public string Reason { get; private set; } = string.Empty;
 
@@ -16,64 +24,27 @@ namespace Dsw2026Tpi.Domain.Entities
 
         public DateTime? CancelledAt { get; private set; }
 
-        protected Appointment()
+        public DateTime? AttendedAt { get; private set; }
+
+        private Appointment()
         {
         }
 
         public Appointment(
-            Guid doctorId,
-            Guid availabilityId,
-            Guid patientId,
-            string reason)
+            AvailabilitySlot slot,
+            Patient patient,
+            string reason,
+            Guid? id = null) : base(id)
         {
-            if (doctorId == Guid.Empty)
-            {
-                throw new ArgumentException(
-                    "DoctorId es obligatorio.",
-                    nameof(doctorId));
-            }
+            Validate(slot, patient, reason);
 
-            if (availabilityId == Guid.Empty)
-            {
-                throw new ArgumentException(
-                    "AvailabilityId es obligatorio.",
-                    nameof(availabilityId));
-            }
-
-            if (patientId == Guid.Empty)
-            {
-                throw new ArgumentException(
-                    "PatientId es obligatorio.",
-                    nameof(patientId));
-            }
-
-            if (string.IsNullOrWhiteSpace(reason))
-            {
-                throw new ArgumentException(
-                    "Reason es obligatorio.",
-                    nameof(reason));
-            }
-
-            var normalizedReason = reason.Trim();
-
-            if (normalizedReason.Length < 5)
-            {
-                throw new ArgumentException(
-                    "Reason debe tener al menos 5 caracteres.",
-                    nameof(reason));
-            }
-
-            if (normalizedReason.Length > 500)
-            {
-                throw new ArgumentException(
-                    "Reason no puede superar los 500 caracteres.",
-                    nameof(reason));
-            }
-
-            DoctorId = doctorId;
-            AvailabilityId = availabilityId;
-            PatientId = patientId;
-            Reason = normalizedReason;
+            AvailabilitySlot = slot;
+            AvailabilitySlotId = slot.Id;
+            DoctorId = slot.DoctorId;
+            Doctor = slot.AvailabilityRule.Doctor;
+            Patient = patient;
+            PatientId = patient.Id;
+            Reason = reason.Trim();
             Status = AppointmentStatuses.Booked;
         }
 
@@ -82,12 +53,70 @@ namespace Dsw2026Tpi.Domain.Entities
             if (Status != AppointmentStatuses.Booked)
             {
                 throw new BusinessRuleException(
-                    "Solo se puede cancelar un turno reservado.",
-                    "INVALID_APPOINTMENT_STATUS");
+                    "La cita no se puede cancelar porque no está reservada.",
+                    nameof(ErrorCodes.APPOINTMENT_NOT_CANCELLABLE));
             }
 
             Status = AppointmentStatuses.Cancelled;
             CancelledAt = DateTime.UtcNow;
+        }
+
+        public void MarkAttended()
+        {
+            EnsureBookedForClosure();
+
+            Status = AppointmentStatuses.Attended;
+            AttendedAt = DateTime.UtcNow;
+        }
+
+        public void MarkNoShow()
+        {
+            EnsureBookedForClosure();
+
+            Status = AppointmentStatuses.NoShow;
+        }
+
+        private void EnsureBookedForClosure()
+        {
+            if (Status != AppointmentStatuses.Booked)
+            {
+                throw new BusinessRuleException(
+                    "La cita no puede cerrarse porque no está reservada.",
+                    nameof(ErrorCodes.APPOINTMENT_NOT_UPDATABLE));
+            }
+        }
+
+        private static void Validate(
+            AvailabilitySlot slot, 
+            Patient patient, 
+            string reason)
+        {
+            if (slot is null || slot.Id == Guid.Empty)
+            {
+                throw new ValidationException(
+                    "El turno/disponibilidad indicado no es válido.",
+                    nameof(ErrorCodes.AVAILABILITY_NOT_FOUND));
+            }
+
+            if (patient is null || patient.Id == Guid.Empty)
+            {
+                throw new ValidationException(
+                    "El paciente indicado no es válido.",
+                    nameof(ErrorCodes.PATIENT_NOT_FOUND));
+            }
+
+            var normalizedReason = reason?.Trim() ??
+                string.Empty;
+
+            if (normalizedReason.Length is < 5 or > 300)
+            {
+                throw new ValidationException(
+                    "El motivo de la consulta no es válido.",
+                    nameof(ErrorCodes.VALIDATION_ERROR))
+                    .WithDetail(
+                        "reason", 
+                        "La longitud debe estar entre 5 y 300 caracteres.");
+            }
         }
     }
 }

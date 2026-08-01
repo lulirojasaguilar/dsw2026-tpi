@@ -12,19 +12,27 @@ public class DoctorConfiguration : IEntityTypeConfiguration<Doctor>
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
+        builder.Property(x => x.Name)
+            .IsRequired()
+            .HasMaxLength(100);
 
-        builder.Property(x => x.LicenseNumber).IsRequired().HasMaxLength(50);
+        builder.Property(x => x.LicenseNumber)
+            .HasMaxLength(50);
 
         builder.Property(x => x.Deleted)
-            .HasColumnName("deleted")
-            .IsRequired()
-            .HasDefaultValue(false);
+            .HasDefaultValue(false)
+            .HasColumnName("deleted");
+
+        builder.Property(d => d.CreatedAt)
+            .IsRequired();
+
+        builder.Property(d => d.UpdatedAt)
+            .IsRequired();
 
         builder.HasOne(x => x.Speciality)
             .WithMany()
             .HasForeignKey(x => x.SpecialityId)
-            .OnDelete(DeleteBehavior.Restrict)
-            .IsRequired();
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

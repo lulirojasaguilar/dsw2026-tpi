@@ -1,10 +1,11 @@
-﻿using Dsw2026Tpi.Application.Dtos;
+﻿using System.Linq;
+using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
-using System.Linq;
+using Microsoft.EntityFrameworkCore;
 
 namespace Dsw2026Tpi.Application.Services
 {
@@ -67,21 +68,33 @@ namespace Dsw2026Tpi.Application.Services
             if (existingSpeciality is not null)
             {
                 throw new ConflictException(
-                    "DUPLICATE_SPECIALITY_NAME", 
-                    "Ya existe una especialidad con ese nombre.")
+                    ErrorCodes.DUPLICATE_SPECIALTY_NAME,
+                    nameof(ErrorCodes.DUPLICATE_SPECIALTY_NAME))
                     .WithDetail(
                     "name",
                     "El nombre de la especialidad ya se encuentra registrado.");     
             }
 
-            var speciality = new Speciality(
-                request.Name,
-                request.Description);
+            var now = DateTime.UtcNow;
+            var speciality = new Speciality(request.Name, request.Description);
+            speciality.CreatedAt = now;
+            speciality.UpdatedAt = now;
 
-            var createdSpeciality =
-                await _persistence.Add(speciality);
+            var createdSpeciality = await _persistence.Add(speciality);
 
-            await _persistence.SaveChangesAsync();
+            try
+            {
+                await _persistence.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (DbConflictHelper.IsUniqueConstraintViolation(ex))
+            {
+                throw new ConflictException(
+                    ErrorCodes.DUPLICATE_SPECIALTY_NAME,
+                    nameof(ErrorCodes.DUPLICATE_SPECIALTY_NAME))
+                    .WithDetail(
+                    "name",
+                    "El nombre de la especialidad ya se encuentra registrado.");
+            }
 
             return new SpecialityModel.Response(
                 createdSpeciality.Id,
@@ -117,17 +130,17 @@ namespace Dsw2026Tpi.Application.Services
             if (existingSpeciality is not null)
             {
                 throw new ConflictException(
-                    "DUPLICATE_SPECIALITY_NAME", 
-                    "Ya existe una especialidad con ese nombre.")
+                    ErrorCodes.DUPLICATE_SPECIALTY_NAME,
+                    nameof(ErrorCodes.DUPLICATE_SPECIALTY_NAME))
                     .WithDetail( 
                     "name", 
                     "El nombre de la especialidad ya se encuentra registrado.");
             }
 
             speciality.Update(request.Name, request.Description);
+            speciality.UpdatedAt = DateTime.UtcNow;
 
             var updatedSpeciality = await _persistence.Update(speciality);
-            
             await _persistence.SaveChangesAsync();
 
             return new SpecialityModel.Response(updatedSpeciality.Id, updatedSpeciality.Name, updatedSpeciality.Description);

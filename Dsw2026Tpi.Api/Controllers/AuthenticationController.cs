@@ -1,6 +1,10 @@
-﻿using Dsw2026Tpi.Application.Dtos;
+﻿using Dsw2026Tpi.Api.Configurations;
+using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.CrossCutting.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Dsw2026Tpi.Api.Controllers;
 
@@ -14,10 +18,23 @@ public class AuthenticationController : AppController
         _authenticationService = authenticationService;
     }
 
-    [HttpPost("admin/login")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [HttpPost("admin/register")]
+    [ProducesResponseType(typeof(RegisterModel.Response), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Login(
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Register([FromBody] RegisterModel.Request request)
+    {
+        var result = await _authenticationService.Register(request);
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
+
+
+    [HttpPost("admin/login")]
+    [EnableRateLimiting(RateLimitingConfigurationExtensions.AdminLoginPolicy)]
+    [ProducesResponseType(typeof(LoginAdminModel.Response), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LoginAdmin(
         [FromBody] LoginAdminModel.Request request)
     {
         var result = await _authenticationService.LoginAdmin(request);
@@ -25,7 +42,8 @@ public class AuthenticationController : AppController
     }
 
     [HttpPost("patient/login")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [EnableRateLimiting(RateLimitingConfigurationExtensions.PatientLoginPolicy)]
+    [ProducesResponseType(typeof(LoginPatientModel.Response), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> LoginPatient(
