@@ -5,11 +5,10 @@ namespace Dsw2026Tpi.Application.Interfaces;
 
 public interface IDoctorService
 {
-    Task<Pagination<DoctorModel.Response>> GetAll( 
+    Task<Pagination<DoctorModel.Response>> GetAll(
         int pageSize, 
         int pageIndex, 
-        string? name = null, 
-        Guid? specialtyId = null);
+        string? name = null);
     Task<DoctorModel.Response> Create(
         DoctorModel.Request request);
     Task<DoctorModel.Response> Update(
@@ -18,7 +17,5 @@ public interface IDoctorService
     Task Delete(
         Guid id);
     Task<IReadOnlyCollection<DoctorModel.AvailabilityResponse>>  GetAvailabilities(
-        Guid doctorId,
-        byte? month = null,
-        short? year = null);
+        Guid doctorId);
 }

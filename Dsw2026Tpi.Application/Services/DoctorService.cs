@@ -20,8 +20,7 @@ public class DoctorService : IDoctorService
     public async Task<Pagination<DoctorModel.Response>> GetAll(
         int pageSize, 
         int pageIndex, 
-        string? name = null, 
-        Guid? specialtyId = null)
+        string? name = null)
     {
         if (pageSize <= 0)
         {
@@ -55,9 +54,7 @@ public class DoctorService : IDoctorService
             pageIndex,
             d => !d.Deleted 
             && (string.IsNullOrWhiteSpace(normalizedName) || 
-            d.Name.Contains(normalizedName)) &&
-            (specialtyId==null ||
-            d.SpecialityId == specialtyId),
+            d.Name.Contains(normalizedName)),
             d => d.Name,
             nameof(Doctor.Speciality));
 
@@ -133,29 +130,17 @@ public class DoctorService : IDoctorService
 
     public async Task<IReadOnlyCollection<DoctorModel.AvailabilityResponse>>
         GetAvailabilities(
-        Guid doctorId, 
-        byte? month = null, 
-        short? year = null)
+        Guid doctorId)
     {
         await EnsureDoctorExists(doctorId);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var targetMonth = month ?? (byte)today.Month;
-        var targetYear = year ?? (short)today.Year;
-
-        if (targetMonth is < 1 or > 12)
-        {
-            throw new ValidationException(
-                "El mes indicado no es válido: debe estar entre 1 y 12.",
-                nameof(ErrorCodes.VALIDATION_ERROR));
-        }
-
+        
         var rules = await _persistence.GetFiltered<AvailabilityRule>(
-            rule =>
-                rule.DoctorId == doctorId 
+            rule => rule.DoctorId == doctorId
                 && !rule.Deleted
-                && rule.Month == targetMonth
-                && rule.Year == targetYear);
+                && rule.Month == today.Month
+                && rule.Year == today.Year);
 
         return (rules ?? [])
             .OrderBy(rule => rule.DayOfWeek)

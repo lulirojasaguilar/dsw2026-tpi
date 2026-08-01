@@ -25,14 +25,12 @@ public class DoctorController : AppController
     public async Task<IActionResult> GetAll(
         [FromQuery]int pageSize = 10, 
         [FromQuery]int pageIndex = 0, 
-        [FromQuery]string? name = null, 
-        [FromQuery] Guid? specialtyId = null)
+        [FromQuery]string? name = null)
     {
         var doctors = await _service.GetAll(
             pageSize,
             pageIndex,
-            name,
-            specialtyId);
+            name);
 
         return Ok(doctors);
     }
@@ -86,15 +84,12 @@ public class DoctorController : AppController
 
     [HttpGet("{id:guid}/availabilities")]
     [ProducesResponseType(typeof(IReadOnlyCollection<DoctorModel.AvailabilityResponse>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAvailabilities(
-        [FromRoute] Guid id,
-        [FromQuery] byte? month = null,
-        [FromQuery] short? year = null)
+        [FromRoute] Guid id)
     {
-        var availabilities = await _service.GetAvailabilities(id, month, year);
+        var availabilities = await _service.GetAvailabilities(id);
 
         return Ok(availabilities);
     }
