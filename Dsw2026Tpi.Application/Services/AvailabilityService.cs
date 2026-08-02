@@ -2,6 +2,7 @@
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.CrossCutting.Resources;
+using Dsw2026Tpi.Domain.Constants;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -70,7 +71,7 @@ namespace Dsw2026Tpi.Application.Services
 
             if (overwrite)
             {
-                await OverwriteExistingMonthAsync(existingRules, now);
+                await OverwriteExistingMonthAsync(existingRules,today, now.TimeOfDay, now);
             }
             else
             {
@@ -120,7 +121,7 @@ namespace Dsw2026Tpi.Application.Services
                     r.EndTime.ToString(@"hh\:mm"))).ToList());
         }
 
-        private async Task OverwriteExistingMonthAsync(List<AvailabilityRule> existingRules, DateTime now)
+        private async Task OverwriteExistingMonthAsync(List<AvailabilityRule> existingRules, DateOnly today, TimeSpan nowTime, DateTime now)
         {
             if (existingRules.Count == 0)
             {
@@ -134,6 +135,14 @@ namespace Dsw2026Tpi.Application.Services
 
             foreach (var slot in existingSlots)
             {
+                var isFuture = slot.SlotDate > today || (slot.SlotDate == today && slot.StartTime > nowTime);
+                var isBooked = slot.Status == AvailabilityStatuses.Booked;
+
+                if (!isFuture || isBooked)
+                {
+                    continue; 
+                }
+
                 slot.Delete();
                 slot.UpdatedAt = now;
                 await _persistence.Update(slot);
