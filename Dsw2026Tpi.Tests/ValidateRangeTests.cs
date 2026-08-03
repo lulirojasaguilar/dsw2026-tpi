@@ -33,4 +33,16 @@ public class ValidateRangeTests
         Assert.Throws<ValidationException>(() =>
             AvailabilityGenerator.ValidateRange(startTime, endTime));
     }
+
+    [Fact]
+    public void ValidateRange_CuandoLaDuracionEsMenorATreintaMinutos_DeberiaLanzarValidationException()
+    {
+        // Arrange
+        var startTime = new TimeSpan(8, 0, 0);
+        var endTime = new TimeSpan(8, 20, 0);
+
+        // Act & Assert
+        Assert.Throws<ValidationException>(() =>
+            AvailabilityGenerator.ValidateRange(startTime, endTime));
+    }
 }
