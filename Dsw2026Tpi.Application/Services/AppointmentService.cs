@@ -274,5 +274,5 @@ public class AppointmentService : IAppointmentService
         new AppointmentModel.PatientDto(
             appointment.Patient.Id,
             long.Parse(appointment.Patient.Dni),
-            appointment.Patient.FullName));
+            appointment.Patient.FullName ?? ""));
 }
