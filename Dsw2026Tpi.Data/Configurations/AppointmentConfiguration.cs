@@ -42,13 +42,13 @@ namespace Dsw2026Tpi.Data.Configurations
                 .IsRequired();
 
             builder.HasOne(appointment => appointment.AvailabilitySlot)
-                .WithMany()
+                .WithMany(slot => slot.Appointments)
                 .HasForeignKey(appointment => appointment.AvailabilitySlotId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasOne(appointment => appointment.Patient)
-                .WithMany()
+                .WithMany(patient => patient.Appointments)
                 .HasForeignKey(appointment => appointment.PatientId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
@@ -69,3 +69,4 @@ namespace Dsw2026Tpi.Data.Configurations
         }
     }
 }
+

@@ -55,11 +55,9 @@ namespace Dsw2026Tpi.Data.Configurations
             builder.Property(rule => rule.UpdatedAt)
                   .IsRequired();
 
-            builder.HasOne(rule => rule.Doctor)
-                  .WithMany()
-                  .HasForeignKey(rule => rule.DoctorId)
-                  .IsRequired()
-                  .OnDelete(DeleteBehavior.Restrict);
+            // La asociación Doctor.Availabilities <-> AvailabilityRule.Doctor se configura en DoctorConfiguration.
+            builder.Navigation(rule => rule.Slots)
+                .UsePropertyAccessMode(PropertyAccessMode.Field);
 
             /* Evita repetir exactamente la misma regla activa.
                La detección de solapamientos parciales debe realizarse

@@ -10,6 +10,9 @@ namespace Dsw2026Tpi.Data.Configurations
         {
             builder.ToTable("Patients");
 
+            builder.Navigation(patient => patient.Appointments)
+                .UsePropertyAccessMode(PropertyAccessMode.Field);
+
             builder.HasKey(p => p.Id);
 
             builder.Property(p => p.Dni)
@@ -41,3 +44,4 @@ namespace Dsw2026Tpi.Data.Configurations
         }
     }
 }
+

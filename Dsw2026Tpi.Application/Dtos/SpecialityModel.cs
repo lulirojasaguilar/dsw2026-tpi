@@ -12,5 +12,9 @@ namespace Dsw2026Tpi.Application.Dtos
             Guid Id, 
             string Name, 
             string Description);
+        public record DoctorItem(
+            Guid Id,
+            string Name,
+            string? LicenseNumber);
     }
 }

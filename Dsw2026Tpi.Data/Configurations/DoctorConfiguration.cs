@@ -1,4 +1,4 @@
-﻿using Dsw2026Tpi.Domain.Entities;
+using Dsw2026Tpi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -30,9 +30,18 @@ public class DoctorConfiguration : IEntityTypeConfiguration<Doctor>
             .IsRequired();
 
         builder.HasOne(x => x.Speciality)
-            .WithMany()
+            .WithMany(speciality => speciality.Doctors)
             .HasForeignKey(x => x.SpecialityId)
             .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(x => x.Availabilities)
+            .WithOne(rule => rule.Doctor)
+            .HasForeignKey(rule => rule.DoctorId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Navigation(x => x.Availabilities)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

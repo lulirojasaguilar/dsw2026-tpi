@@ -1,7 +1,7 @@
-﻿using System.Linq;
-using Dsw2026Tpi.Application.Dtos;
+﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Helpers;
 using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
@@ -12,49 +12,44 @@ namespace Dsw2026Tpi.Application.Services
     public class SpecialityService : ISpecialityService
     {
         private readonly IPersistence _persistence;
+
         public SpecialityService(IPersistence persistence)
         {
             _persistence = persistence;
         }
-        public async Task<Pagination<SpecialityModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null)
+
+        public async Task<Pagination<SpecialityModel.Response>> GetAll(
+            int pageSize, 
+            int pageIndex, 
+            string? name = null)
         {
-            if (pageSize <= 0)
+            RequestValidations.ValidatePagination(pageSize, pageIndex);
+
+            var normalizedName = RequestValidations.NormalizeNameFilter(name);
+
+            var specialities = await _persistence.Paginate<Speciality, string>(
+                pageSize,
+                pageIndex,
+                s => !s.Deleted
+                    && (normalizedName == null || s.Name.Contains(normalizedName)),
+                s => s.Name);
+
+            return specialities.Map(Map);
+        }
+
+        public async Task<SpecialityModel.Response> GetById(
+            Guid id)
+        {
+            EnsureIdentifier(id);
+
+            var speciality = await _persistence.GetById<Speciality>(id);
+
+            if (speciality is null || speciality.Deleted)
             {
-                throw new ValidationException(
-                    "El tamaño de página debe ser mayor que cero.",
-                    nameof(ErrorCodes.VALIDATION_ERROR))
-                    .WithDetail(
-                        "pageSize",
-                        "Debe ser mayor que cero.");
+                throw new EntityNotFoundException("Speciality");
             }
 
-            if (pageIndex < 0)
-            {
-                throw new ValidationException(
-                    "El índice de página no puede ser negativo.",
-                    nameof(ErrorCodes.VALIDATION_ERROR))
-                    .WithDetail(
-                        "pageIndex",
-                        "No puede ser negativo.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                name = name.Trim();
-
-                if (name.Length < 3 || name.Length > 100)
-                {
-                    throw new ValidationException(
-                        "El nombre debe tener entre 3 y 100 caracteres.",
-                        nameof(ErrorCodes.VALIDATION_ERROR))
-                        .WithDetail(
-                            "name",
-                            "Debe tener entre 3 y 100 caracteres.");
-                }
-            }
-
-            var specialities = await _persistence.Paginate<Speciality, string>(pageSize, pageIndex, s =>!s.Deleted && (string.IsNullOrWhiteSpace(name) || s.Name.Contains(name)), s => s.Name);
-            return specialities.Map(s => new SpecialityModel.Response(s.Id, s.Name, s.Description));
+            return Map(speciality);
         }
 
         public async Task<SpecialityModel.Response> Create(SpecialityModel.Request request)
@@ -67,12 +62,7 @@ namespace Dsw2026Tpi.Application.Services
 
             if (existingSpeciality is not null)
             {
-                throw new ConflictException(
-                    ErrorCodes.DUPLICATE_SPECIALTY_NAME,
-                    nameof(ErrorCodes.DUPLICATE_SPECIALTY_NAME))
-                    .WithDetail(
-                    "name",
-                    "El nombre de la especialidad ya se encuentra registrado.");     
+                throw DuplicateName();
             }
 
             var now = DateTime.UtcNow;
@@ -88,37 +78,22 @@ namespace Dsw2026Tpi.Application.Services
             }
             catch (DbUpdateException ex) when (DbConflictHelper.IsUniqueConstraintViolation(ex))
             {
-                throw new ConflictException(
-                    ErrorCodes.DUPLICATE_SPECIALTY_NAME,
-                    nameof(ErrorCodes.DUPLICATE_SPECIALTY_NAME))
-                    .WithDetail(
-                    "name",
-                    "El nombre de la especialidad ya se encuentra registrado.");
+                throw DuplicateName();
             }
 
-            return new SpecialityModel.Response(
-                createdSpeciality.Id,
-                createdSpeciality.Name,
-                createdSpeciality.Description);
+            return Map(createdSpeciality);
         }
 
-        public async Task<SpecialityModel.Response> Update(Guid id, SpecialityModel.Request request)
+        public async Task<SpecialityModel.Response> Update(
+            Guid id, SpecialityModel.Request request)
         {
-            if (id == Guid.Empty)
-            {
-                throw new ValidationException(
-                    "El identificador de la especialidad es obligatorio.",
-                    nameof(ErrorCodes.VALIDATION_ERROR))
-                    .WithDetail(
-                        "id",
-                        "Debe indicar un identificador válido.");
-            }
+            EnsureIdentifier(id);
 
             request = NormalizeRequest(request);
 
             ValidateRequest(request);
 
-            var speciality = await _persistence.GetById<Speciality>(id);
+            var speciality = await _persistence.GetById<Speciality>(id, nameof(Speciality.Doctors));
 
             if (speciality is null || speciality.Deleted)
             {
@@ -129,12 +104,7 @@ namespace Dsw2026Tpi.Application.Services
 
             if (existingSpeciality is not null)
             {
-                throw new ConflictException(
-                    ErrorCodes.DUPLICATE_SPECIALTY_NAME,
-                    nameof(ErrorCodes.DUPLICATE_SPECIALTY_NAME))
-                    .WithDetail( 
-                    "name", 
-                    "El nombre de la especialidad ya se encuentra registrado.");
+                throw DuplicateName();
             }
 
             speciality.Update(request.Name, request.Description);
@@ -143,10 +113,80 @@ namespace Dsw2026Tpi.Application.Services
             var updatedSpeciality = await _persistence.Update(speciality);
             await _persistence.SaveChangesAsync();
 
-            return new SpecialityModel.Response(updatedSpeciality.Id, updatedSpeciality.Name, updatedSpeciality.Description);
+            return Map(updatedSpeciality);
         }
 
         public async Task Delete(Guid id)
+        {
+            EnsureIdentifier(id);
+
+            var speciality = await _persistence.GetById<Speciality>(id, nameof(Speciality.Doctors));
+
+            if (speciality is null || speciality.Deleted)
+            {
+                throw new EntityNotFoundException("Speciality");
+            }
+
+            if (speciality.HasDoctors)
+            {
+                // No se borra una especialidad con médicos asociados.
+                throw new ConflictException(
+                    ErrorCodes.SPECIALITY_HAS_DOCTORS,
+                    nameof(ErrorCodes.SPECIALITY_HAS_DOCTORS));
+            }
+
+            speciality.Delete();
+            speciality.UpdatedAt = DateTime.UtcNow;
+
+            await _persistence.Update(speciality);
+            await _persistence.SaveChangesAsync();
+        }
+
+        public async Task<IReadOnlyCollection<SpecialityModel.DoctorItem>> GetDoctors(Guid specialtyId)
+        {
+            EnsureIdentifier(specialtyId);
+
+            var speciality = await _persistence.GetById<Speciality>(specialtyId);
+
+            if (speciality is null || speciality.Deleted)
+            {
+                throw new EntityNotFoundException("Speciality");
+            }
+
+            var doctors = await _persistence.GetFiltered<Doctor>(
+                doctor => doctor.SpecialityId == specialtyId
+                    && !doctor.Deleted);
+
+            var items = (doctors ?? [])
+                .OrderBy(doctor => doctor.Name)
+                .Select(doctor => new SpecialityModel.DoctorItem(doctor.Id, doctor.Name, doctor.LicenseNumber))
+                .ToList();
+
+            if (items.Count == 0)
+            {
+                // El front muestra "no hay médicos relacionados" a partir de este error.
+                throw new EntityNotFoundException(
+                    ErrorCodes.DOCTORS_NOT_FOUND,
+                    nameof(ErrorCodes.DOCTORS_NOT_FOUND));
+            }
+
+            return items;
+        }
+
+        private static SpecialityModel.Response Map(Speciality speciality) => new(
+            speciality.Id,
+            speciality.Name,
+            speciality.Description);
+
+        private static AppException DuplicateName() =>
+            new ConflictException(
+                ErrorCodes.DUPLICATE_SPECIALTY_NAME,
+                nameof(ErrorCodes.DUPLICATE_SPECIALTY_NAME))
+                .WithDetail(
+                    "name",
+                    "El nombre de la especialidad ya se encuentra registrado.");
+
+        private static void EnsureIdentifier(Guid id)
         {
             if (id == Guid.Empty)
             {
@@ -157,18 +197,6 @@ namespace Dsw2026Tpi.Application.Services
                         "id",
                         "Debe indicar un identificador válido.");
             }
-
-            var speciality = await _persistence.GetById<Speciality>(id);
-
-            if (speciality is null || speciality.Deleted)
-            {
-                throw new EntityNotFoundException("Speciality");
-            }
-
-            speciality.Delete();
-
-            await _persistence.Update(speciality);
-            await _persistence.SaveChangesAsync();
         }
 
         private static SpecialityModel.Request NormalizeRequest(
@@ -184,7 +212,11 @@ namespace Dsw2026Tpi.Application.Services
                         "Debe enviar los datos de la especialidad.");
             }
 
-            return new SpecialityModel.Request(request.Name?.Trim() ?? string.Empty, request.Description?.Trim() ?? string.Empty);
+            return request with
+            {
+                Name = request.Name?.Trim() ?? string.Empty,
+                Description = request.Description?.Trim() ?? string.Empty
+            };
         }
 
         private static void ValidateRequest(SpecialityModel.Request request)

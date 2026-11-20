@@ -8,6 +8,11 @@ public interface IPersistence
     Task<T?> GetById<T>(Guid id, params string[] include) where T : EntityBase;
     Task<IEnumerable<T>?> GetAll<T>(params string[] include) where T : EntityBase;
     Task<T?> First<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase;
+
+    //Igual que First, pero el que llama arma los includes (por ejemplo filtrados: solo disponibilidades no eliminadas)
+    //para traer el agregado completo en una sola consulta.
+    Task<T?> FirstWith<T>(Expression<Func<T, bool>> predicate, Func<IQueryable<T>, IQueryable<T>> shape) where T : EntityBase;
+    Task<bool> Any<T>(Expression<Func<T, bool>> predicate) where T : EntityBase;
     Task<IEnumerable<T>?> GetFiltered<T>(Expression<Func<T, bool>> predicate, params string[] include) where T : EntityBase;
     Task<T> Add<T>(T entity) where T : EntityBase;
     Task<T> Update<T>(T entity) where T : EntityBase;

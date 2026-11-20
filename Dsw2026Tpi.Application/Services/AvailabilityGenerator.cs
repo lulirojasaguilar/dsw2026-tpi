@@ -135,7 +135,8 @@ namespace Dsw2026Tpi.Application.Services
         public List<AvailabilitySlot> GenerateSlotsForMonth(
             AvailabilityRule rule,
             DateOnly today,
-            TimeSpan nowTimeOfDay)
+            TimeSpan nowTimeOfDay,
+            IReadOnlySet<(DateOnly Date, TimeSpan Start)>? occupied = null)
         {
             var slots = new List<AvailabilitySlot>();
 
@@ -163,10 +164,11 @@ namespace Dsw2026Tpi.Application.Services
                     var currentSlotEnd = currentSlotStart.Add(TimeSpan.FromMinutes(30));
 
                     var isPastSlotToday = currentDate == today && currentSlotStart < nowTimeOfDay;
+                    var isOccupied = occupied?.Contains((currentDate, currentSlotStart)) ?? false;
 
-                    if (!isPastSlotToday)
+                    if (!isPastSlotToday && !isOccupied)
                     {
-                        slots.Add(new AvailabilitySlot(rule, rule.DoctorId, currentDate, currentSlotStart, currentSlotEnd));
+                        slots.Add(rule.AddSlot(currentDate, currentSlotStart, currentSlotEnd));
                     }
 
                     currentSlotStart = currentSlotEnd;

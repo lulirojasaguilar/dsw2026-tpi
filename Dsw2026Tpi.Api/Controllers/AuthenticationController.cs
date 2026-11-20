@@ -18,17 +18,6 @@ public class AuthenticationController : AppController
         _authenticationService = authenticationService;
     }
 
-    [HttpPost("admin/register")]
-    [ProducesResponseType(typeof(RegisterModel.Response), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Register([FromBody] RegisterModel.Request request)
-    {
-        var result = await _authenticationService.Register(request);
-        return StatusCode(StatusCodes.Status201Created, result);
-    }
-
-
     [HttpPost("admin/login")]
     [EnableRateLimiting(RateLimitingConfigurationExtensions.AdminLoginPolicy)]
     [ProducesResponseType(typeof(LoginAdminModel.Response), StatusCodes.Status200OK)]

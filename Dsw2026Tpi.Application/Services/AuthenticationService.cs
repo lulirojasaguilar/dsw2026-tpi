@@ -40,82 +40,6 @@ public class AuthenticationService : IAuthenticationService
         _logger = logger;
     }
 
-    public async Task<RegisterModel.Response> Register(RegisterModel.Request request)
-    {
-        ValidateRequest(request);
-
-        var email = request.Email.Trim();
-
-        if (await _userManager.FindByEmailAsync(email) is not null)
-        {
-            _logger.LogWarning("Intento de registrar un email ya existente: {Email}", email);
-            throw new ConflictException(ErrorCodes.REGISTER_USER_CONFLICT, nameof(ErrorCodes.REGISTER_USER_CONFLICT));
-        }
-
-        var now = DateTime.UtcNow;
-
-        var user = new ApplicationUser
-        {
-            UserName = email,
-            Email = email,
-            EmailConfirmed = true,
-            Deleted = false,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
-        var createResult = await _userManager.CreateAsync(user, request.Password);
-
-        if (!createResult.Succeeded)
-        {
-            var error = new ValidationException(
-                ErrorCodes.REGISTER_USER_INVALID,
-                nameof(ErrorCodes.REGISTER_USER_INVALID));
-
-            error.WithDetail(createResult.Errors.Select(e => (e.Code, e.Description)));
-
-            _logger.LogWarning(
-                "No se pudo registrar el administrador {Email}: {Errors}",
-                email, string.Join("; ", createResult.Errors.Select(e => e.Description)));
-
-            throw error;
-        }
-
-        await EnsureAdministratorRoleExists();
-
-        var roleResult = await _userManager.AddToRoleAsync(user, Roles.Administrator);
-
-        if (!roleResult.Succeeded)
-        {
-            await _userManager.DeleteAsync(user);
-
-            var errors = string.Join("; ", roleResult.Errors.Select(e => e.Description));
-            _logger.LogError("No se pudo asignar el rol Administrador a {Email}: {Errors}", email, errors);
-
-            throw new ConflictException(ErrorCodes.REGISTER_USER_CONFLICT, errors);
-        }
-
-        _logger.LogInformation("Administrador registrado: {Email}", email);
-
-        return new RegisterModel.Response(email);
-    }
-
-    private async Task EnsureAdministratorRoleExists()
-    {
-        if (await _roleManager.RoleExistsAsync(Roles.Administrator))
-        {
-            return;
-        }
-
-        var result = await _roleManager.CreateAsync(new IdentityRole<Guid>(Roles.Administrator));
-
-        if (!result.Succeeded)
-        {
-            var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new ConflictException(ErrorCodes.REGISTER_USER_CONFLICT, errors);
-        }
-    }
-
     public async Task<LoginAdminModel.Response> LoginAdmin(LoginAdminModel.Request request)
     {
         ValidateAdminRequest(request);
@@ -289,27 +213,6 @@ public class AuthenticationService : IAuthenticationService
         }
 
         return claims;
-    }
-
-    private static void ValidateRequest(RegisterModel.Request request)
-    {
-        var errors = new List<(string Field, string Issue)>();
-
-        if (!request.Email.IsEmailValid())
-        {
-            errors.Add(("email", "El email es obligatorio y debe tener un formato válido."));
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
-        {
-            errors.Add(("password", "La contraseña es obligatoria y debe contener al menos 8 caracteres."));
-        }
-
-        if (errors.Count > 0)
-        {
-            throw new ValidationException(ErrorCodes.VALIDATION_ERROR, nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail(errors);
-        }
     }
 
     private static void ValidateAdminRequest(LoginAdminModel.Request request)

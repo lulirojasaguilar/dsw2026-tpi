@@ -1,10 +1,13 @@
 ﻿using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.CrossCutting.Resources;
+using Dsw2026Tpi.Domain.Constants;
 
 namespace Dsw2026Tpi.Domain.Entities
 {
     public class Patient : EntityBase
     {
+        private readonly List<Appointment> _appointments = [];
+
         public Guid ApplicationUserId { get; private set; }
 
         public string Dni { get; private set; }
@@ -12,6 +15,9 @@ namespace Dsw2026Tpi.Domain.Entities
         public string? FullName { get; private set; }
 
         public bool Deleted { get; private set; }
+
+        /// <summary>Citas del paciente. La lista es privada: se agrega con <see cref="AddAppointment"/>.</summary>
+        public IReadOnlyCollection<Appointment> Appointments => _appointments.AsReadOnly();
 
         #region Constructor for EF
 #pragma warning disable CS8618
@@ -51,6 +57,24 @@ namespace Dsw2026Tpi.Domain.Entities
             Deleted = true;
         }
 
+        /// <summary>
+        /// Reserva el turno para el paciente: marca el turno como reservado y registra la cita
+        /// en ambos extremos (paciente y turno).
+        /// </summary>
+        public Appointment AddAppointment(AvailabilitySlot slot, string reason)
+        {
+            var appointment = new Appointment(slot, this, reason);
+
+            slot.MarkBooked();
+            slot.RegisterAppointment(appointment);
+            _appointments.Add(appointment);
+
+            return appointment;
+        }
+
+        public bool HasBookedAppointments =>
+            _appointments.Any(appointment => appointment.Status == AppointmentStatuses.Booked);
+
         public static bool IsValidDni(string? dni, int minDigits = 7, int maxDigits = 10)
         {
             var normalized = dni?.Trim();
@@ -82,3 +106,4 @@ namespace Dsw2026Tpi.Domain.Entities
         }
     }
 }
+

@@ -1,4 +1,4 @@
-﻿using Dsw2026Tpi.Application.Dtos;
+using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Identity;
 using Dsw2026Tpi.Domain.Entities;
@@ -24,7 +24,7 @@ public class DoctorController : AppController
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetAll(
         [FromQuery]int pageSize = 10, 
-        [FromQuery]int pageIndex = 0, 
+        [FromQuery] int pageIndex = 1, 
         [FromQuery]string? name = null)
     {
         var doctors = await _service.GetAll(
@@ -33,6 +33,18 @@ public class DoctorController : AppController
             name);
 
         return Ok(doctors);
+    }
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(DoctorModel.Response), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(
+        [FromRoute] Guid id)
+    {
+        var doctor = await _service.GetById(id);
+
+        return Ok(doctor);
     }
 
     [HttpPost]
@@ -74,6 +86,7 @@ public class DoctorController : AppController
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(
         [FromRoute] Guid id)
     {
@@ -92,5 +105,20 @@ public class DoctorController : AppController
         var availabilities = await _service.GetAvailabilities(id);
 
         return Ok(availabilities);
+    }
+
+    [HttpGet("{id:guid}/slots")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<DoctorModel.SlotResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSlots(
+        [FromRoute] Guid id,
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to)
+    {
+        var slots = await _service.GetSlots(id, from, to);
+
+        return Ok(slots);
     }
 }

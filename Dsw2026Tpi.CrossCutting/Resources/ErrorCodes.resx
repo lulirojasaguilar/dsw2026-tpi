@@ -129,9 +129,6 @@
   <data name="REGISTER_USER_CONFLICT" xml:space="preserve">
     <value>Se produjo un error al registrar el usuario</value>
   </data>
-  <data name="REGISTER_USER_INVALID" xml:space="preserve">
-    <value>Datos de registración de usuario no válidos</value>
-  </data>
   <data name="UNHANDLED_ERROR" xml:space="preserve">
     <value>Se produjo un error no controlado</value>
   </data>
@@ -185,5 +182,14 @@
   </data>
   <data name="INVALID_APPOINTMENT_STATUS" xml:space="preserve">
     <value>El estado indicado no es válido para esta operación: use ATTENDED o NO_SHOW</value>
+  </data>
+  <data name="SPECIALITY_HAS_DOCTORS" xml:space="preserve">
+    <value>No se puede eliminar la especialidad porque tiene médicos asociados</value>
+  </data>
+  <data name="DOCTOR_HAS_APPOINTMENTS" xml:space="preserve">
+    <value>No se puede eliminar el médico porque tiene turnos reservados</value>
+  </data>
+  <data name="DOCTORS_NOT_FOUND" xml:space="preserve">
+    <value>No hay médicos relacionados con la especialidad indicada</value>
   </data>
 </root>

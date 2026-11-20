@@ -1,10 +1,12 @@
 ﻿using Dsw2026Tpi.CrossCutting.Resources;
 using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.Domain.Constants;
 
 namespace Dsw2026Tpi.Domain.Entities
 {
     public class AvailabilityRule : EntityBase
     {
+        private readonly List<AvailabilitySlot> _slots = [];
         public Guid DoctorId { get; private set; }
 
         public Doctor Doctor { get; private set; } = null!;
@@ -21,6 +23,8 @@ namespace Dsw2026Tpi.Domain.Entities
 
         public bool Deleted { get; private set; }
 
+        //Turnos de 30 minutos de esta regla. La lista es privada: los turnos los crea la regla (<see cref="AddSlot"/>).
+        public IReadOnlyCollection<AvailabilitySlot> Slots => _slots.AsReadOnly();
         private AvailabilityRule()
         {
         }
@@ -58,6 +62,33 @@ namespace Dsw2026Tpi.Domain.Entities
             Deleted = true;
         }
 
+        //Creador: la disponibilidad crea sus turnos
+
+        //Crea y registra un turno de esta regla.
+        public AvailabilitySlot AddSlot(DateOnly slotDate, TimeSpan startTime, TimeSpan endTime)
+        {
+            var slot = new AvailabilitySlot(this, DoctorId, slotDate, startTime, endTime);
+
+            _slots.Add(slot);
+
+            return slot;
+        }
+
+        //Da de baja los turnos futuros que todavía no fueron reservados.
+        public void DeleteFreeFutureSlots(DateOnly today, TimeSpan nowTime, DateTime now)
+        {
+            foreach (var slot in _slots.Where(s => !s.Deleted))
+            {
+                var isFuture = slot.SlotDate > today || (slot.SlotDate == today && slot.StartTime > nowTime);
+                var isBooked = slot.Status == AvailabilityStatuses.Booked;
+
+                if (isFuture && !isBooked)
+                {
+                    slot.Delete();
+                    slot.UpdatedAt = now;
+                }
+            }
+        }
 
         private static void Validate(
             Doctor doctor,

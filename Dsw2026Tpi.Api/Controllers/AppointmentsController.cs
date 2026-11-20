@@ -86,12 +86,12 @@ namespace Dsw2026Tpi.Api.Controllers
 
         [HttpGet]
         [Authorize(Policy = Policies.AdminPolicy)]
-        [ProducesResponseType(typeof(Pagination<AppointmentModel.Response>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(Pagination<AppointmentModel.SearchResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> GetByDate(
                 [FromQuery] DateOnly date,
                 [FromQuery] int pageSize = 10,
-                [FromQuery] int pageIndex = 0)
+                [FromQuery] int pageIndex = 1)
         {
             var appointments =
                 await _service.GetByDate(
@@ -104,11 +104,11 @@ namespace Dsw2026Tpi.Api.Controllers
 
         [HttpGet("search")]
         [Authorize(Policy = Policies.AdminPolicy)]
-        [ProducesResponseType(typeof(Pagination<AppointmentModel.Response>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(Pagination<AppointmentModel.SearchResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Search(
                 [FromQuery] int pageSize = 10,
-                [FromQuery] int pageIndex = 0,
+                [FromQuery] int pageIndex = 1,
                 [FromQuery] Guid? specialtyId = null,
                 [FromQuery] Guid? doctorId = null,
                 [FromQuery] long? dni = null,
@@ -138,3 +138,4 @@ namespace Dsw2026Tpi.Api.Controllers
         }
     }
 }
+

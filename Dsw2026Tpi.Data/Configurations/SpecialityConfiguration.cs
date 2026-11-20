@@ -30,6 +30,9 @@ public class SpecialityConfiguration : IEntityTypeConfiguration<Speciality>
         builder.Property(speciality => speciality.UpdatedAt)
             .IsRequired();
 
+        builder.Navigation(speciality => speciality.Doctors)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.HasIndex(speciality => speciality.Name)
             .IsUnique()
             .HasFilter("[deleted] = 0")

@@ -80,13 +80,26 @@ public class PersistenceEf : IPersistence
             }
         });
     }
-
     public async Task<T?> First<T>(
         Expression<Func<T, bool>> 
         predicate, params string[] include) 
         where T : EntityBase
     {
         return await Include(_context.Set<T>(), include).FirstOrDefaultAsync(predicate);
+    }
+    public async Task<T?> FirstWith<T>(
+        Expression<Func<T, bool>> predicate,
+        Func<IQueryable<T>, IQueryable<T>> shape)
+        where T : EntityBase
+    {
+        return await shape(_context.Set<T>()).FirstOrDefaultAsync(predicate);
+    }
+
+    public async Task<bool> Any<T>(
+        Expression<Func<T, bool>> predicate)
+        where T : EntityBase
+    {
+        return await _context.Set<T>().AnyAsync(predicate);
     }
 
     public async Task<IEnumerable<T>?> GetAll<T>(
@@ -112,63 +125,39 @@ public class PersistenceEf : IPersistence
         return await Include(_context.Set<T>(), include).Where(predicate).ToListAsync();
     }
 
+    //Paginado con base 1: pageIndex = 1 es la primera página. La respuesta devuelve el mismo
+    //pageIndex que se pidió; si esa página no existe, devuelve la última que tiene datos.
+
     public async Task<Pagination<T>> Paginate<T, TKey>(
-        int pageSize, 
-        int pageIndex, 
-        Expression<Func<T, bool>> predicate, 
-        Expression<Func<T, TKey>> sortOrder, 
-        params string[] includes) 
+        int pageSize,
+        int pageIndex,
+        Expression<Func<T, bool>> predicate,
+        Expression<Func<T, TKey>> sortOrder,
+        params string[] includes)
         where T : EntityBase
     {
         pageSize = Math.Abs(pageSize);
-        pageIndex = Math.Abs(pageIndex) == 0 ? 0 : Math.Abs(pageIndex) - 1;
+        var requestedPage = Math.Max(1, Math.Abs(pageIndex));
 
         var filtered = Include(_context.Set<T>(), includes)
                  .Where(predicate)
                  .OrderBy(sortOrder);
 
         var total = await filtered.CountAsync();
-
-
-        async Task<Pagination<T>> GetPage(int skip, int take)
+        if (total == 0 || pageSize == 0)
         {
-            var data = await filtered
-               .Skip(skip)
-               .Take(take)
-               .ToListAsync();
-
-            return new Pagination<T>(
-                pageSize,
-                pageIndex,
-                data,
-                total);
+            return new Pagination<T>(pageSize, 1, [], total);
         }
 
-        //la pagina existe
-        if (total > pageSize * pageIndex)
-        {
-            return await GetPage(pageIndex * pageSize, pageSize);
-        }
+        var lastPage = (int)Math.Ceiling(total / (double)pageSize);
+        var page = Math.Min(requestedPage, lastPage);
 
-        //solo hay una pagina
-        if (total < pageSize)
-        {
-            return new Pagination<T>(pageSize, pageIndex, await filtered.ToListAsync(), total);
-        }
+        var data = await filtered
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
 
-        var targetPageIndex = pageIndex - 1;
-
-        while (true)
-        {
-            if (total > targetPageIndex * pageSize)
-            {
-                return await GetPage(targetPageIndex * pageSize, pageSize);
-            }
-
-            targetPageIndex--;
-
-            if (targetPageIndex < 0) return new Pagination<T>(pageSize, 0, [], 0);
-        }
+        return new Pagination<T>(pageSize, page, data, total);
     }
 
     private static IQueryable<T> Include<T>(

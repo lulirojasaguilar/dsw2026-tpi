@@ -1,4 +1,4 @@
-﻿using Dsw2026Tpi.Application.Dtos;
+using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Domain.Entities;
 
 namespace Dsw2026Tpi.Application.Interfaces
@@ -6,15 +6,19 @@ namespace Dsw2026Tpi.Application.Interfaces
     public interface ISpecialityService
     {
         Task<Pagination<SpecialityModel.Response>> GetAll(
-            int pageSize, 
-            int pageIndex, 
+            int pageSize,
+            int pageIndex,
             string? name = null);
+        Task<SpecialityModel.Response> GetById(
+            Guid id);
         Task<SpecialityModel.Response> Create(
             SpecialityModel.Request request);
         Task<SpecialityModel.Response> Update(
-            Guid id, 
+            Guid id,
             SpecialityModel.Request request);
         Task Delete(
             Guid id);
+        Task<IReadOnlyCollection<SpecialityModel.DoctorItem>> GetDoctors(
+            Guid specialtyId);
     }
 }

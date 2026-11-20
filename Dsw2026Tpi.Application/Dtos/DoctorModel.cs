@@ -1,4 +1,4 @@
-﻿namespace Dsw2026Tpi.Application.Dtos;
+namespace Dsw2026Tpi.Application.Dtos;
 
 public record DoctorModel
 {
@@ -8,19 +8,23 @@ public record DoctorModel
         Guid SpecialtyId);
 
     public record Response(
-        Guid Id, 
-        string Name, 
-        string? LicenseNumber, 
+        Guid Id,
+        string Name,
+        string? LicenseNumber,
         SpecialityDto Specialty);
 
     public record SpecialityDto(
-        Guid Id, 
+        Guid Id,
         string Name);
 
     public record AvailabilityResponse(
         Guid Id,
         string Day,
-        string StartTime, 
+        string StartTime,
         string EndTime);
 
+    public record SlotResponse(
+        Guid Id,
+        DateOnly Date,
+        string StartTime);
 }

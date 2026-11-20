@@ -1,15 +1,18 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
 using Dsw2026Tpi.CrossCutting.Exceptions;
+using Dsw2026Tpi.CrossCutting.Helpers;
 using Dsw2026Tpi.CrossCutting.Resources;
+using Dsw2026Tpi.Domain.Constants;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
-
 
 namespace Dsw2026Tpi.Application.Services;
 
 public class DoctorService : IDoctorService
 {
+    private const int MaxSlotRangeDays = 31;
+
     private readonly IPersistence _persistence;
 
     public DoctorService(IPersistence persistence)
@@ -18,47 +21,36 @@ public class DoctorService : IDoctorService
     }
 
     public async Task<Pagination<DoctorModel.Response>> GetAll(
-        int pageSize, 
-        int pageIndex, 
+        int pageSize,
+        int pageIndex,
         string? name = null)
     {
-        if (pageSize <= 0)
-        {
-            throw new ValidationException(
-                "El tamaño de página debe ser mayor que cero.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail("pageSize", "Debe ser mayor que cero.");
-        }
+        RequestValidations.ValidatePagination(pageSize, pageIndex);
 
-        if (pageIndex < 0)
-        {
-            throw new ValidationException(
-                "El índice de página no puede ser negativo.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail("pageIndex", "No puede ser negativo.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(name) &&
-            (name.Length < 3 || name.Length > 100))
-        {
-            throw new ValidationException(
-                "El filtro por nombre debe tener entre 3 y 100 caracteres.",
-                nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail("name", "Debe tener entre 3 y 100 caracteres.");
-        }
-
-        var normalizedName = name?.Trim();
+        var normalizedName = RequestValidations.NormalizeNameFilter(name);
 
         var page = await _persistence.Paginate<Doctor, string>(
-            pageSize, 
+            pageSize,
             pageIndex,
-            d => !d.Deleted 
-            && (string.IsNullOrWhiteSpace(normalizedName) || 
-            d.Name.Contains(normalizedName)),
+            d => !d.Deleted
+                && (normalizedName == null || d.Name.Contains(normalizedName)),
             d => d.Name,
             nameof(Doctor.Speciality));
 
         return page.Map(Map);
+    }
+
+    public async Task<DoctorModel.Response> GetById(
+        Guid id)
+    {
+        var doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality));
+
+        if (doctor is null || doctor.Deleted)
+        {
+            throw new EntityNotFoundException("Doctor");
+        }
+
+        return Map(doctor);
     }
 
     public async Task<DoctorModel.Response> Create(
@@ -71,7 +63,7 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException("Speciality");
         }
 
-        var doctor = new Doctor(request.Name, request.LicenseNumber, speciality);
+        var doctor = speciality.AddDoctor(request.Name, request.LicenseNumber);
 
         var now = DateTime.UtcNow;
         doctor.CreatedAt = now;
@@ -82,8 +74,9 @@ public class DoctorService : IDoctorService
 
         return Map(doctor);
     }
+
     public async Task<DoctorModel.Response> Update(
-        Guid id, 
+        Guid id,
         DoctorModel.Request request)
     {
         var doctor = await _persistence.GetById<Doctor>(id, nameof(Doctor.Speciality))
@@ -120,12 +113,25 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException("Doctor");
         }
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var hasBookedAppointments = await _persistence.Any<Appointment>(
+            appointment => appointment.DoctorId == id
+                && appointment.Status == AppointmentStatuses.Booked
+                && appointment.AvailabilitySlot.SlotDate >= today);
+
+        if (hasBookedAppointments)
+        {
+            throw new ConflictException(
+                ErrorCodes.DOCTOR_HAS_APPOINTMENTS,
+                nameof(ErrorCodes.DOCTOR_HAS_APPOINTMENTS));
+        }
+
         doctor.Delete();
         doctor.UpdatedAt = DateTime.UtcNow;
 
         await _persistence.Update(doctor);
         await _persistence.SaveChangesAsync();
-
     }
 
     public async Task<IReadOnlyCollection<DoctorModel.AvailabilityResponse>>
@@ -135,7 +141,7 @@ public class DoctorService : IDoctorService
         await EnsureDoctorExists(doctorId);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        
+
         var rules = await _persistence.GetFiltered<AvailabilityRule>(
             rule => rule.DoctorId == doctorId
                 && !rule.Deleted
@@ -150,6 +156,54 @@ public class DoctorService : IDoctorService
                 AvailabilityGenerator.DayName(rule.DayOfWeek),
                 rule.StartTime.ToString(@"hh\:mm"),
                 rule.EndTime.ToString(@"hh\:mm")))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyCollection<DoctorModel.SlotResponse>> GetSlots(
+        Guid doctorId,
+        DateOnly from,
+        DateOnly to)
+    {
+        if (from > to)
+        {
+            throw new ValidationException(
+                "El rango de fechas no es válido.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail("from", "from no puede ser posterior a to.");
+        }
+
+        if (to.DayNumber - from.DayNumber + 1 > MaxSlotRangeDays)
+        {
+            throw new ValidationException(
+                "El rango de fechas no es válido.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail("to", $"El rango no puede superar los {MaxSlotRangeDays} días.");
+        }
+
+        var doctor = await _persistence.GetById<Doctor>(doctorId);
+
+        if (doctor is null || !doctor.IsBookable)
+        {
+            throw new EntityNotFoundException(ErrorCodes.DOCTOR_NOT_FOUND, nameof(ErrorCodes.DOCTOR_NOT_FOUND));
+        }
+
+        var slots = await _persistence.GetFiltered<AvailabilitySlot>(
+            slot => slot.DoctorId == doctorId
+                && !slot.Deleted
+                && slot.Status == AvailabilityStatuses.Available
+                && slot.SlotDate >= from
+                && slot.SlotDate <= to);
+
+        var now = DateTime.UtcNow;
+
+        return (slots ?? [])
+            .Where(slot => !slot.HasStarted(now))
+            .OrderBy(slot => slot.SlotDate)
+            .ThenBy(slot => slot.StartTime)
+            .Select(slot => new DoctorModel.SlotResponse(
+                slot.Id,
+                slot.SlotDate,
+                slot.StartTime.ToString(@"hh\:mm")))
             .ToList();
     }
 
@@ -169,4 +223,3 @@ public class DoctorService : IDoctorService
         }
     }
 }
-

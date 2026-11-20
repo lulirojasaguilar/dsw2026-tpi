@@ -16,12 +16,12 @@ namespace Dsw2026Tpi.Application.Interfaces
             Guid id,
             Guid patientId);
 
-        Task<Pagination<AppointmentModel.Response>> GetByDate(
+        Task<Pagination<AppointmentModel.SearchResponse>> GetByDate(
             DateOnly date,
             int pageSize,
             int pageIndex);
 
-        Task<Pagination<AppointmentModel.Response>> Search(
+        Task<Pagination<AppointmentModel.SearchResponse>> Search(
             int pageSize,
             int pageIndex,
             Guid? specialtyId = null,

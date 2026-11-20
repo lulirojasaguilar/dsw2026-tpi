@@ -61,11 +61,26 @@ namespace Dsw2026Tpi.Data.Configurations
                     .IsRequired();
 
 
+
             /* Relación compuesta con AvailabilityRule.
                No alcanza con comprobar que AvailabilityRuleId y DoctorId existan por separado. Ambos deben corresponder a la misma regla.
               
                Ejemplo que ahora quedará impedido:
               
+               AvailabilityRuleId = regla del Doctor A
+               DoctorId = Doctor B */
+            // Asociación con los dos extremos: AvailabilityRule.Slots <-> AvailabilitySlot.AvailabilityRule.
+            // Es la clave foránea simple (AvailabilityRuleId) que ya existía en la base.
+            builder.HasOne(slot => slot.AvailabilityRule)
+                .WithMany(rule => rule.Slots)
+                .HasForeignKey(slot => slot.AvailabilityRuleId)
+                .IsRequired();
+
+            /* Relación compuesta con AvailabilityRule (también ya existía).
+               No alcanza con comprobar que AvailabilityRuleId y DoctorId existan por separado. Ambos deben corresponder a la misma regla.
+
+               Ejemplo que ahora quedará impedido:
+
                AvailabilityRuleId = regla del Doctor A
                DoctorId = Doctor B */
 
@@ -76,13 +91,16 @@ namespace Dsw2026Tpi.Data.Configurations
                     slot.AvailabilityRuleId,
                     slot.DoctorId
                 })
-                .HasPrincipalKey(slot => new
+                .HasPrincipalKey(rule => new
                 {
-                    slot.Id,
-                    slot.DoctorId
+                    rule.Id,
+                    rule.DoctorId
                 })
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Navigation(slot => slot.Appointments)
+                .UsePropertyAccessMode(PropertyAccessMode.Field);
 
             //Impide crear dos slots activos para el mismo médico, en la misma fecha y en la misma hora de inicio.
 

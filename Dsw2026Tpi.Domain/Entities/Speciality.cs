@@ -5,11 +5,15 @@ namespace Dsw2026Tpi.Domain.Entities;
 
 public class Speciality : EntityBase
 {
+    private readonly List<Doctor> _doctors = [];
+
     public string Name { get; private set; }
 
     public string Description { get; private set; }
 
     public bool Deleted { get; private set; }
+
+    public IReadOnlyCollection<Doctor> Doctors => _doctors.AsReadOnly();
 
     #region Constructor for EF
 
@@ -20,8 +24,8 @@ public class Speciality : EntityBase
     #endregion
 
     public Speciality(
-        string name, 
-        string description, 
+        string name,
+        string description,
         Guid? id = null) : base(id)
     {
         Validate(name, description);
@@ -42,6 +46,24 @@ public class Speciality : EntityBase
     public void Delete()
     {
         Deleted = true;
+    }
+
+    public bool HasDoctors => _doctors.Any(doctor => !doctor.Deleted);
+
+    public Doctor AddDoctor(string name, string? licenseNumber) =>
+        new(name, licenseNumber, this);
+
+    internal void Register(Doctor doctor)
+    {
+        if (!_doctors.Contains(doctor))
+        {
+            _doctors.Add(doctor);
+        }
+    }
+
+    internal void RemoveDoctor(Doctor doctor)
+    {
+        _doctors.Remove(doctor);
     }
 
     public static void ValidateInput(string? name, string? description) => Validate(name!, description!);

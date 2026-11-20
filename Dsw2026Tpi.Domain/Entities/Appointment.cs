@@ -30,7 +30,7 @@ namespace Dsw2026Tpi.Domain.Entities
         {
         }
 
-        public Appointment(
+        internal Appointment(
             AvailabilitySlot slot,
             Patient patient,
             string reason,
@@ -57,9 +57,14 @@ namespace Dsw2026Tpi.Domain.Entities
                     nameof(ErrorCodes.APPOINTMENT_NOT_CANCELLABLE));
             }
 
+            // Experto: la cita libera su propio turno al cancelarse
+            AvailabilitySlot.MarkAvailable();
+
             Status = AppointmentStatuses.Cancelled;
             CancelledAt = DateTime.UtcNow;
         }
+
+        public bool BelongsTo(Guid patientId) => PatientId == patientId;
 
         public void MarkAttended()
         {
@@ -87,8 +92,8 @@ namespace Dsw2026Tpi.Domain.Entities
         }
 
         private static void Validate(
-            AvailabilitySlot slot, 
-            Patient patient, 
+            AvailabilitySlot slot,
+            Patient patient,
             string reason)
         {
             if (slot is null || slot.Id == Guid.Empty)
@@ -114,9 +119,10 @@ namespace Dsw2026Tpi.Domain.Entities
                     "El motivo de la consulta no es válido.",
                     nameof(ErrorCodes.VALIDATION_ERROR))
                     .WithDetail(
-                        "reason", 
+                        "reason",
                         "La longitud debe estar entre 5 y 300 caracteres.");
             }
         }
     }
 }
+

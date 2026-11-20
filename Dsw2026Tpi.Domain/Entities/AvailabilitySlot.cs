@@ -7,6 +7,7 @@ namespace Dsw2026Tpi.Domain.Entities
 {
     public class AvailabilitySlot : EntityBase
     {
+        private readonly List<Appointment> _appointments = [];
         public Guid AvailabilityRuleId { get; private set; }
 
         public AvailabilityRule AvailabilityRule { get; private set; } = null!;
@@ -23,11 +24,17 @@ namespace Dsw2026Tpi.Domain.Entities
 
         public bool Deleted { get; private set; }
 
+        //Historial de citas del turno (una cancelada puede volver a reservarse).
+        public IReadOnlyCollection<Appointment> Appointments => _appointments.AsReadOnly();
+
+        //La cita vigente del turno (0..1): la que está reservada, o null si el turno está libre.
+        public Appointment? Appointment =>
+            _appointments.FirstOrDefault(appointment => appointment.Status == AppointmentStatuses.Booked);
         private AvailabilitySlot() 
         { 
         }
 
-        public AvailabilitySlot(
+        internal AvailabilitySlot(
             AvailabilityRule rule,
             Guid doctorId, 
             DateOnly slotDate, 
@@ -54,6 +61,12 @@ namespace Dsw2026Tpi.Domain.Entities
 
         public bool IsAvailable =>
             Status == AvailabilityStatuses.Available && !Deleted;
+
+        //Experto: el turno sabe cuándo empieza.
+        public DateTime StartDateTime =>
+            SlotDate.ToDateTime(TimeOnly.FromTimeSpan(StartTime));
+
+        public bool HasStarted(DateTime now) => StartDateTime <= now;
 
         public void MarkBooked()
         {
@@ -93,6 +106,11 @@ namespace Dsw2026Tpi.Domain.Entities
         public void Delete()
         {
             Deleted = true;
+        }
+
+        internal void RegisterAppointment(Appointment appointment)
+        {
+            _appointments.Add(appointment);
         }
     }
 }

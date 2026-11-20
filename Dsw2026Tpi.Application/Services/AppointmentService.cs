@@ -30,11 +30,12 @@ public class AppointmentService : IAppointmentService
     {
         ValidateRequest(request);
 
-        var doctor = await _persistence.First<Doctor>(
-            doctor =>
-                doctor.Id == request.DoctorId &&
-                !doctor.Deleted)
-            ?? throw new EntityNotFoundException(ErrorCodes.DOCTOR_NOT_FOUND, nameof(ErrorCodes.DOCTOR_NOT_FOUND));
+        var doctor = await _persistence.First<Doctor>(d => d.Id == request.DoctorId);
+
+        if (doctor is null || !doctor.IsBookable)
+        {
+            throw new EntityNotFoundException(ErrorCodes.DOCTOR_NOT_FOUND, nameof(ErrorCodes.DOCTOR_NOT_FOUND));
+        }
 
         var dni = request.Patient.Dni.ToString();
 
@@ -49,16 +50,15 @@ public class AppointmentService : IAppointmentService
         await _persistence.ExecuteInTransactionAsync(async () =>
         {
             var slot = await _persistence.First<AvailabilitySlot>(
-                s => s.Id == request.AvailabilitySlotId && 
-                s.DoctorId == doctor.Id && 
+                s => s.Id == request.AvailabilitySlotId &&
+                s.DoctorId == doctor.Id &&
                 !s.Deleted,
                 "AvailabilityRule.Doctor.Speciality")
                 ?? throw new EntityNotFoundException(ErrorCodes.AVAILABILITY_NOT_FOUND, nameof(ErrorCodes.AVAILABILITY_NOT_FOUND));
 
             var now = DateTime.UtcNow;
-            var slotDateTime = slot.SlotDate.ToDateTime(TimeOnly.FromTimeSpan(slot.StartTime));
 
-            if (slotDateTime <= now)
+            if (slot.HasStarted(now))
             {
                 _logger.LogWarning(
                     "Intento de reserva rechazado por fecha/hora pasada. DoctorId={DoctorId} AvailabilitySlotId={AvailabilitySlotId}",
@@ -69,13 +69,11 @@ public class AppointmentService : IAppointmentService
                     nameof(ErrorCodes.PAST_DATETIME_NOT_ALLOWED));
             }
 
-            slot.MarkBooked();
-            slot.UpdatedAt = now;
-            await _persistence.Update(slot);
-
-            var appointment = new Appointment(slot, patient, request.Reason);
+            // El paciente crea la cita: marca el turno como reservado y la registra en ambos extremos
+            var appointment = patient.AddAppointment(slot, request.Reason);
             appointment.CreatedAt = now;
             appointment.UpdatedAt = now;
+            slot.UpdatedAt = now;
 
             await _persistence.Add(appointment);
 
@@ -138,22 +136,22 @@ public class AppointmentService : IAppointmentService
     }
 
     public async Task Cancel(
-        Guid id, 
+        Guid id,
         Guid patientId)
     {
         var appointment = await _persistence.First<Appointment>(
-                a => 
-                    a.Id == id, 
+                a =>
+                    a.Id == id,
                     "AvailabilitySlot")
                 ?? throw new EntityNotFoundException(
-                    ErrorCodes.APPOINTMENT_NOT_FOUND, 
+                    ErrorCodes.APPOINTMENT_NOT_FOUND,
                     nameof(ErrorCodes.APPOINTMENT_NOT_FOUND));
 
-        if (appointment.PatientId != patientId)
+        if (!appointment.BelongsTo(patientId))
         {
             _logger.LogWarning(
                 "Intento de cancelar un turno que no pertenece al paciente autenticado. AppointmentId={AppointmentId} RequestingPatientId={RequestingPatientId}",
-                id, 
+                id,
                 patientId);
 
             throw new AuthorizationException(
@@ -163,7 +161,6 @@ public class AppointmentService : IAppointmentService
         appointment.Cancel();
         appointment.UpdatedAt = DateTime.UtcNow;
 
-        appointment.AvailabilitySlot.MarkAvailable();
         appointment.AvailabilitySlot.UpdatedAt = DateTime.UtcNow;
 
         await _persistence.Update(appointment);
@@ -171,17 +168,17 @@ public class AppointmentService : IAppointmentService
         await _persistence.SaveChangesAsync();
 
         _logger.LogInformation(
-            "Turno cancelado. AppointmentId={AppointmentId} PatientId={PatientId}", 
-            id, 
+            "Turno cancelado. AppointmentId={AppointmentId} PatientId={PatientId}",
+            id,
             patientId);
     }
 
-    public async Task<Pagination<AppointmentModel.Response>> GetByDate(
+    public async Task<Pagination<AppointmentModel.SearchResponse>> GetByDate(
             DateOnly date,
             int pageSize,
             int pageIndex)
     {
-        ValidatePagination(pageSize, pageIndex);
+        RequestValidations.ValidatePagination(pageSize, pageIndex);
 
         var page = await _persistence.Paginate<Appointment, TimeSpan>(
             pageSize,
@@ -190,10 +187,10 @@ public class AppointmentService : IAppointmentService
             a => a.AvailabilitySlot.StartTime,
             "AvailabilitySlot", "Doctor.Speciality", "Patient");
 
-        return page.Map(MapResponse);
+        return page.Map(MapSearchResponse);
     }
 
-    public async Task<Pagination<AppointmentModel.Response>>
+    public async Task<Pagination<AppointmentModel.SearchResponse>>
         Search(
             int pageSize,
             int pageIndex,
@@ -202,7 +199,7 @@ public class AppointmentService : IAppointmentService
             long? dni = null,
             DateOnly? date = null)
     {
-        ValidatePagination(pageSize, pageIndex);
+        RequestValidations.ValidatePagination(pageSize, pageIndex);
 
         var dniText = dni?.ToString();
 
@@ -216,7 +213,7 @@ public class AppointmentService : IAppointmentService
             a => a.AvailabilitySlot.SlotDate,
             "AvailabilitySlot", "Doctor.Speciality", "Patient");
 
-        return page.Map(MapResponse);
+        return page.Map(MapSearchResponse);
     }
 
     private static void ValidateRequest(
@@ -249,14 +246,21 @@ public class AppointmentService : IAppointmentService
         }
     }
 
-    private static void ValidatePagination(int pageSize, int pageIndex)
-    {
-        if (pageSize <= 0 || pageIndex < 0)
-        {
-            throw new ValidationException("Los parámetros de paginación no son válidos.", nameof(ErrorCodes.VALIDATION_ERROR))
-                .WithDetail("pageSize", "pageSize debe ser mayor a 0 y pageIndex mayor o igual a 0.");
-        }
-    }
+    private static AppointmentModel.SearchResponse MapSearchResponse(Appointment appointment) => new(
+        appointment.Id,
+        appointment.Status,
+        new AppointmentModel.SearchPatientDto(
+            long.Parse(appointment.Patient.Dni),
+            appointment.Patient.FullName ?? ""),
+        new AppointmentModel.SearchDoctorDto(
+            appointment.Doctor.Id,
+            appointment.Doctor.Name,
+            new AppointmentModel.SearchSpecialityDto(
+                appointment.Doctor.Speciality.Id,
+                appointment.Doctor.Speciality.Name)),
+        appointment.AvailabilitySlot.SlotDate,
+        appointment.AvailabilitySlot.StartTime.ToString(@"hh\:mm"),
+        appointment.AvailabilitySlot.EndTime.ToString(@"hh\:mm"));
 
     private static AppointmentModel.Response MapResponse(Appointment appointment) => new(
         appointment.Id,

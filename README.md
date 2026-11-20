@@ -74,11 +74,12 @@ Para poder usar la mayoría de los endpoints hay que estar autenticado con un to
 
 - `POST /api/auth/admin/login`
 - `POST /api/auth/patient/login`
-- `POST /api/auth/admin/register`
 
 Una vez que se hace login, la API devuelve un `token`. Ese token hay que copiarlo y pegarlo en el botón **Authorize** de Swagger (con el formato `Bearer <token>`), y así queda autenticado para el resto de las pruebas.
 
 Hay dos roles: **ADMINISTRADOR** (gestiona médicos, especialidades, disponibilidades y puede buscar turnos) y **PACIENTE** (reserva y cancela sus propios turnos).
+
+Existe un único administrador, que se crea al iniciar la API con el email y la contraseña configurados en `appsettings` (sección `Admin`). No se pueden registrar otros administradores. El paciente no tiene registro aparte: si el DNI no existe, se crea al hacer su primer login.
 
 ## Endpoints implementados
 
@@ -87,12 +88,6 @@ Todos los endpoints, salvo los dos logins, necesitan el header `Authorization: B
 probar cada endpoint desde Swagger o Postman.
 
 ### Autenticación
-
-**`POST /api/auth/admin/register`** — registra un nuevo administrador. No pide token.
-```json
-{ "email": "otro-admin@dsw2026.com", "password": "OtraPass123!" }
-```
-Responde `201 Created` con `{ "email": "otro-admin@dsw2026.com" }`.
 
 **`POST /api/auth/admin/login`** — login del administrador.
 ```json
@@ -111,10 +106,12 @@ Responde `{ "token": "...", "role": "PACIENTE" }`.
 
 | Método | Endpoint | Uso |
 |---|---|---|
-| GET | `/api/specialties?pageSize=10&pageIndex=0&name=` | Lista, paginado y con filtro opcional por nombre. |
+| GET | `/api/specialties?pageSize=10&pageIndex=1&name=` | Lista, paginado (`pageIndex` es el número de página: 1 es la primera) y con filtro opcional por nombre. No trae las eliminadas (borrado lógico). |
+| GET | `/api/specialties/{id}` | Una especialidad por id. |
+| GET | `/api/specialties/{id}/doctors` | Médicos de la especialidad, sin paginar: `[ { id, name, licenseNumber } ]`. Si no tiene ninguno responde 404 con el código `DOCTORS_NOT_FOUND` y el front muestra que no hay doctores relacionados. |
 | POST | `/api/specialties` | Crea una especialidad. |
 | PUT | `/api/specialties/{id}` | Edita una especialidad existente. |
-| DELETE | `/api/specialties/{id}` | Da de baja lógica (no se borra de la base). |
+| DELETE | `/api/specialties/{id}` | Da de baja lógica (no se borra de la base). Responde 409 (`SPECIALITY_HAS_DOCTORS`) si tiene médicos asociados. |
 
 Body de `POST`/`PUT`:
 ```json
@@ -125,11 +122,13 @@ Body de `POST`/`PUT`:
 
 | Método | Endpoint | Uso |
 |---|---|---|
-| GET | `/api/doctors?pageSize=10&pageIndex=0&name=` | Lista, paginado y con filtro por nombre. |
+| GET | `/api/doctors?pageSize=10&pageIndex=1&name=` | Lista, paginado y con filtro por nombre. No trae los eliminados. |
+| GET | `/api/doctors/{id}` | Un médico por id. |
 | GET | `/api/doctors/{id}/availabilities` | Horarios de atención del médico (por día de la semana). |
+| GET | `/api/doctors/{id}/slots?from=YYYY-MM-DD&to=YYYY-MM-DD` | **Turnos libres y futuros** del médico: `[ { id, date, startTime } ]`, ordenados. El `id` es el `availabilitySlotId` para reservar. Máximo 31 días de rango. |
 | POST | `/api/doctors` | Da de alta un médico. |
 | PUT | `/api/doctors/{id}` | Edita un médico. |
-| DELETE | `/api/doctors/{id}` | Da de baja lógica. |
+| DELETE | `/api/doctors/{id}` | Da de baja lógica. Responde 409 (`DOCTOR_HAS_APPOINTMENTS`) si tiene turnos reservados, para no dejar turnos huérfanos. |
 
 Body de `POST`/`PUT` (`specialtyId` sale del `id` que devuelve `POST /api/specialties`):
 ```json
@@ -153,7 +152,7 @@ automáticamente los turnos de 30 minutos para el resto del mes en curso, saltea
 ```
 
 Los `id` de los turnos generados (`availabilitySlotId`, necesarios para reservar) se consultan
-en la tabla `AvailabilitySlots` de la base.
+con `GET /api/doctors/{id}/slots`.
 
 ### Turnos
 
@@ -172,7 +171,7 @@ en la tabla `AvailabilitySlots` de la base.
 | GET | `/api/appointments/patient?dni={dni}` | Paciente | Sus propios turnos activos. |
 | DELETE | `/api/appointments/{id}` | Paciente | Cancela un turno propio (solo si está `BOOKED`). |
 | GET | `/api/appointments?date=YYYY-MM-DD` | Administrador | Turnos de un día puntual. |
-| GET | `/api/appointments/search?specialtyId=&doctorId=&dni=&date=` | Administrador | Búsqueda combinada, todos los filtros son opcionales. |
+| GET | `/api/appointments/search?pageSize=&pageIndex=&specialtyId=&doctorId=&dni=&date=` | Administrador | Búsqueda combinada, todos los filtros son opcionales. Cada turno se devuelve con `appointmentsId`, `appointmentsStatus`, `patient { dni, fullName }` y `doctor { doctorId, name, specialty { specialtyId, name } }`, más `date`, `startTime` y `endTime`. |
 
 
 ## Manejo de errores

@@ -37,19 +37,12 @@ namespace Dsw2026Tpi.Application.Services
         {
             ValidateRequest(request);
 
-            var doctor = await _persistence.GetById<Doctor>(request.DoctorId)
-                ?? throw new EntityNotFoundException(ErrorCodes.DOCTOR_NOT_FOUND, nameof(ErrorCodes.DOCTOR_NOT_FOUND));
-
-            if (doctor.Deleted)
-            {
-                throw new EntityNotFoundException(ErrorCodes.DOCTOR_NOT_FOUND, nameof(ErrorCodes.DOCTOR_NOT_FOUND));
-            }
-
             var now = DateTime.UtcNow;
             var today = DateOnly.FromDateTime(now);
             var month = (byte)today.Month;
             var year = (short)today.Year;
 
+            // Se valida y convierte lo que llega antes de ir a la base
             var parsedDays = request.Days
                 .Select(d => new
                 {
@@ -64,43 +57,53 @@ namespace Dsw2026Tpi.Application.Services
                 AvailabilityGenerator.ValidateRange(day.StartTime, day.EndTime);
             }
 
-            ValidateNoOverlapsWithinRequest(parsedDays.Select(d => (d.DayOfWeek, d.StartTime, d.EndTime)));
+            // Una sola consulta: el médico con sus disponibilidades vigentes del mes (las eliminadas no se traen)
+            // y los turnos vigentes de cada una.
+            var doctor = await _persistence.FirstWith<Doctor>(
+                d => d.Id == request.DoctorId && !d.Deleted,
+                query => query
+                    .Include(d => d.Availabilities.Where(r => !r.Deleted && r.Month == month && r.Year == year))
+                    .ThenInclude(r => r.Slots.Where(s => !s.Deleted)))
+                ?? throw new EntityNotFoundException(ErrorCodes.DOCTOR_NOT_FOUND, nameof(ErrorCodes.DOCTOR_NOT_FOUND));
 
-            var existingRules = (await _persistence.GetFiltered<AvailabilityRule>(
-                r => r.DoctorId == doctor.Id && r.Month == month && r.Year == year && !r.Deleted))?.ToList() ?? [];
-
+            // Experto: el médico sabe qué disponibilidades tiene. Creador: él crea las reglas y cada regla sus turnos.
             if (overwrite)
             {
-                await OverwriteExistingMonthAsync(existingRules,today, now.TimeOfDay, now);
+                doctor.ClearAvailabilities(month, year, today, now.TimeOfDay, now);
             }
-            else
-            {
-                ValidateNoOverlapsWithExisting(parsedDays.Select(d => (d.DayOfWeek, d.StartTime, d.EndTime)), existingRules);
-            }
+
+            var existingSlots = await _persistence.GetFiltered<AvailabilitySlot>(
+                s => s.DoctorId == doctor.Id && !s.Deleted && s.SlotDate >= today) ?? [];
+
+            var occupied = existingSlots
+                .Where(s => !s.Deleted)
+                .Select(s => (s.SlotDate, s.StartTime))
+                .ToHashSet();
 
             var createdRules = new List<AvailabilityRule>();
             var createdSlots = new List<AvailabilitySlot>();
 
             foreach (var day in parsedDays)
             {
-                var rule = new AvailabilityRule(doctor, month, year, day.DayOfWeek, day.StartTime, day.EndTime);
+                var rule = doctor.AddAvailability(month, year, day.DayOfWeek, day.StartTime, day.EndTime);
                 rule.CreatedAt = now;
                 rule.UpdatedAt = now;
 
-                await _persistence.Add(rule);
-                createdRules.Add(rule);
-
-                var slots = _generator.GenerateSlotsForMonth(rule, today, now.TimeOfDay);
+                var slots = _generator.GenerateSlotsForMonth(rule, today, now.TimeOfDay, occupied);
 
                 foreach (var slot in slots)
                 {
                     slot.CreatedAt = now;
                     slot.UpdatedAt = now;
-                    await _persistence.Add(slot);
                 }
 
+                createdRules.Add(rule);
                 createdSlots.AddRange(slots);
             }
+
+            // Las entidades nuevas se agregan de forma explícita (tienen Guid asignado desde el constructor)
+            await _persistence.AddRange(createdRules);
+            await _persistence.AddRange(createdSlots);
 
             await ExecuteWithFriendlyConflictAsync(() => _persistence.SaveChangesAsync());
 
@@ -121,41 +124,6 @@ namespace Dsw2026Tpi.Application.Services
                     r.EndTime.ToString(@"hh\:mm"))).ToList());
         }
 
-        private async Task OverwriteExistingMonthAsync(List<AvailabilityRule> existingRules, DateOnly today, TimeSpan nowTime, DateTime now)
-        {
-            if (existingRules.Count == 0)
-            {
-                return;
-            }
-
-            var ruleIds = existingRules.Select(r => r.Id).ToHashSet();
-
-            var existingSlots = (await _persistence.GetFiltered<AvailabilitySlot>(
-                s => ruleIds.Contains(s.AvailabilityRuleId) && !s.Deleted))?.ToList() ?? [];
-
-            foreach (var slot in existingSlots)
-            {
-                var isFuture = slot.SlotDate > today || (slot.SlotDate == today && slot.StartTime > nowTime);
-                var isBooked = slot.Status == AvailabilityStatuses.Booked;
-
-                if (!isFuture || isBooked)
-                {
-                    continue; 
-                }
-
-                slot.Delete();
-                slot.UpdatedAt = now;
-                await _persistence.Update(slot);
-            }
-
-            foreach (var rule in existingRules)
-            {
-                rule.Delete();
-                rule.UpdatedAt = now;
-                await _persistence.Update(rule);
-            }
-        }
-
         private static void ValidateRequest(AvailabilityModel.Request request)
         {
             if (request.DoctorId == Guid.Empty)
@@ -170,42 +138,6 @@ namespace Dsw2026Tpi.Application.Services
                     .WithDetail("days", "days debe contener al menos un elemento.");
             }
         }
-
-        private static void ValidateNoOverlapsWithinRequest(IEnumerable<(byte DayOfWeek, TimeSpan Start, TimeSpan End)> days)
-        {
-            var byDay = days.GroupBy(d => d.DayOfWeek);
-
-            foreach (var group in byDay)
-            {
-                var ordered = group.OrderBy(d => d.Start).ToList();
-
-                for (var i = 1; i < ordered.Count; i++)
-                {
-                    if (ordered[i].Start < ordered[i - 1].End)
-                    {
-                        throw new ConflictException(ErrorCodes.SCHEDULE_OVERLAP, nameof(ErrorCodes.SCHEDULE_OVERLAP))
-                            .WithDetail("days", "Hay horarios superpuestos para el mismo día en la solicitud.");
-                    }
-                }
-            }
-        }
-
-        private static void ValidateNoOverlapsWithExisting(
-            IEnumerable<(byte DayOfWeek, TimeSpan Start, TimeSpan End)> days,
-            List<AvailabilityRule> existingRules)
-        {
-            foreach (var day in days)
-            {
-                var overlaps = existingRules.Any(r =>
-                    r.DayOfWeek == day.DayOfWeek && day.Start < r.EndTime && r.StartTime < day.End);
-
-                if (overlaps)
-                {
-                    throw new ConflictException(ErrorCodes.SCHEDULE_OVERLAP, nameof(ErrorCodes.SCHEDULE_OVERLAP));
-                }
-            }
-        }
-
         private static async Task ExecuteWithFriendlyConflictAsync(Func<Task> action)
         {
             try
