@@ -15,13 +15,16 @@ namespace Dsw2026Tpi.Application.Services;
 public class AppointmentService : IAppointmentService
 {
     private readonly IPersistence _persistence;
+    private readonly IClinicClock _clock;
     private readonly ILogger<AppointmentService> _logger;
 
     public AppointmentService(
            IPersistence persistence,
+           IClinicClock clock,
            ILogger<AppointmentService> logger)
     {
         _persistence = persistence;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -58,7 +61,7 @@ public class AppointmentService : IAppointmentService
 
             var now = DateTime.UtcNow;
 
-            if (slot.HasStarted(now))
+            if (slot.HasStarted(_clock.Now))
             {
                 _logger.LogWarning(
                     "Intento de reserva rechazado por fecha/hora pasada. DoctorId={DoctorId} AvailabilitySlotId={AvailabilitySlotId}",

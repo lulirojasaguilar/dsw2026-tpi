@@ -13,6 +13,7 @@ public static class DependencyInjectionConfigurationExtensions
     {
         services.AddScoped<IPersistence, PersistenceEf>();
         services.AddSingleton<IHolidayProvider, JsonHolidayProvider>();
+        services.AddSingleton<IClinicClock, ClinicClock>();
         services.AddScoped<AvailabilityGenerator>();
 
         services.AddScoped<ISpecialityService, SpecialityService>();
