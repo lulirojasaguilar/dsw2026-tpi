@@ -15,18 +15,22 @@ namespace Dsw2026Tpi.Application.Services;
 public class AppointmentService : IAppointmentService
 {
     private readonly IPersistence _persistence;
+    private readonly IClinicClock _clock;
     private readonly ILogger<AppointmentService> _logger;
 
     public AppointmentService(
            IPersistence persistence,
+           IClinicClock clock,
            ILogger<AppointmentService> logger)
     {
         _persistence = persistence;
+        _clock = clock;
         _logger = logger;
     }
 
     public async Task<AppointmentModel.Response> Create(
-        AppointmentModel.Request request)
+        AppointmentModel.Request request,
+        Guid requestingPatientId)
     {
         ValidateRequest(request);
 
@@ -45,6 +49,15 @@ public class AppointmentService : IAppointmentService
                 !patient.Deleted)
             ?? throw new EntityNotFoundException(ErrorCodes.PATIENT_NOT_FOUND, nameof(ErrorCodes.PATIENT_NOT_FOUND));
 
+        if (patient.Id != requestingPatientId)
+        {
+            _logger.LogWarning(
+                "Intento de reservar un turno con un DNI que no pertenece al paciente autenticado. RequestingPatientId={RequestingPatientId}",
+                requestingPatientId);
+
+            throw new AuthorizationException(nameof(ErrorCodes.PATIENT_MISMATCH));
+        }
+
         AppointmentModel.Response response = null!;
 
         await _persistence.ExecuteInTransactionAsync(async () =>
@@ -58,7 +71,7 @@ public class AppointmentService : IAppointmentService
 
             var now = DateTime.UtcNow;
 
-            if (slot.HasStarted(now))
+            if (slot.HasStarted(_clock.Now))
             {
                 _logger.LogWarning(
                     "Intento de reserva rechazado por fecha/hora pasada. DoctorId={DoctorId} AvailabilitySlotId={AvailabilitySlotId}",
@@ -155,7 +168,7 @@ public class AppointmentService : IAppointmentService
                 patientId);
 
             throw new AuthorizationException(
-                ErrorCodes.PATIENT_MISMATCH);
+                nameof(ErrorCodes.PATIENT_MISMATCH));
         }
 
         appointment.Cancel();
@@ -174,16 +187,24 @@ public class AppointmentService : IAppointmentService
     }
 
     public async Task<Pagination<AppointmentModel.SearchResponse>> GetByDate(
-            DateOnly date,
+            DateOnly? date,
             int pageSize,
             int pageIndex)
     {
+        if (date is null)
+        {
+            throw new ValidationException(
+                "La fecha es obligatoria.",
+                nameof(ErrorCodes.VALIDATION_ERROR))
+                .WithDetail("date", "date es obligatorio y debe tener formato YYYY-MM-DD.");
+        }
+
         RequestValidations.ValidatePagination(pageSize, pageIndex);
 
         var page = await _persistence.Paginate<Appointment, TimeSpan>(
             pageSize,
             pageIndex,
-            a => a.AvailabilitySlot.SlotDate == date,
+            a => a.AvailabilitySlot.SlotDate == date.Value,
             a => a.AvailabilitySlot.StartTime,
             "AvailabilitySlot", "Doctor.Speciality", "Patient");
 
