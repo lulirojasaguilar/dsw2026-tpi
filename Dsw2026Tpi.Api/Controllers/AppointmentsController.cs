@@ -33,8 +33,13 @@ namespace Dsw2026Tpi.Api.Controllers
         public async Task<IActionResult> Create(
             [FromBody] AppointmentModel.Request request)
         {
+            if (!TryGetPatientId(out var patientId))
+            {
+                throw new AuthorizationException(nameof(ErrorCodes.PATIENT_MISMATCH));
+            }
+
             var appointment =
-                await _service.Create(request);
+                await _service.Create(request, patientId);
 
             return StatusCode(
                 StatusCodes.Status201Created,
@@ -53,7 +58,7 @@ namespace Dsw2026Tpi.Api.Controllers
         {
             if (!TryGetPatientId(out var patientId))
             {
-                throw new AuthorizationException(ErrorCodes.PATIENT_MISMATCH);
+                throw new AuthorizationException(nameof(ErrorCodes.PATIENT_MISMATCH));
             }
 
             var appointments =
@@ -74,7 +79,7 @@ namespace Dsw2026Tpi.Api.Controllers
         {
             if (!TryGetPatientId(out var patientId))
             {
-                throw new AuthorizationException(ErrorCodes.PATIENT_MISMATCH);
+                throw new AuthorizationException(nameof(ErrorCodes.PATIENT_MISMATCH));
             }
 
             await _service.Cancel(
@@ -89,7 +94,7 @@ namespace Dsw2026Tpi.Api.Controllers
         [ProducesResponseType(typeof(Pagination<AppointmentModel.SearchResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> GetByDate(
-                [FromQuery] DateOnly date,
+                [FromQuery] DateOnly? date,
                 [FromQuery] int pageSize = 10,
                 [FromQuery] int pageIndex = 1)
         {

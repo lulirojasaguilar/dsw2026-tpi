@@ -6,7 +6,8 @@ namespace Dsw2026Tpi.Application.Interfaces
     public interface IAppointmentService
     {
         Task<AppointmentModel.Response> Create(
-            AppointmentModel.Request request);
+            AppointmentModel.Request request,
+            Guid requestingPatientId);
 
         Task<IReadOnlyCollection<AppointmentModel.Response>> GetByPatient(
             long dni,
@@ -17,7 +18,7 @@ namespace Dsw2026Tpi.Application.Interfaces
             Guid patientId);
 
         Task<Pagination<AppointmentModel.SearchResponse>> GetByDate(
-            DateOnly date,
+            DateOnly? date,
             int pageSize,
             int pageIndex);
 
