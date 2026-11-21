@@ -15,15 +15,18 @@ namespace Dsw2026Tpi.Application.Services
     {
         private readonly IPersistence _persistence;
         private readonly AvailabilityGenerator _generator;
+        private readonly IClinicClock _clock;
         private readonly ILogger<AvailabilityService> _logger;
 
         public AvailabilityService(
             IPersistence persistence,
             AvailabilityGenerator generator,
+            IClinicClock clock,
             ILogger<AvailabilityService> logger)
         {
             _persistence = persistence;
             _generator = generator;
+            _clock = clock;
             _logger = logger;
         }
 
@@ -38,7 +41,8 @@ namespace Dsw2026Tpi.Application.Services
             ValidateRequest(request);
 
             var now = DateTime.UtcNow;
-            var today = DateOnly.FromDateTime(now);
+            var clinicNow = _clock.Now;
+            var today = _clock.Today;
             var month = (byte)today.Month;
             var year = (short)today.Year;
 
@@ -69,7 +73,7 @@ namespace Dsw2026Tpi.Application.Services
             // Experto: el médico sabe qué disponibilidades tiene. Creador: él crea las reglas y cada regla sus turnos.
             if (overwrite)
             {
-                doctor.ClearAvailabilities(month, year, today, now.TimeOfDay, now);
+                doctor.ClearAvailabilities(month, year, today, clinicNow.TimeOfDay, now);
             }
 
             var existingSlots = await _persistence.GetFiltered<AvailabilitySlot>(
@@ -89,7 +93,7 @@ namespace Dsw2026Tpi.Application.Services
                 rule.CreatedAt = now;
                 rule.UpdatedAt = now;
 
-                var slots = _generator.GenerateSlotsForMonth(rule, today, now.TimeOfDay, occupied);
+                var slots = _generator.GenerateSlotsForMonth(rule, today, clinicNow.TimeOfDay, occupied);
 
                 foreach (var slot in slots)
                 {

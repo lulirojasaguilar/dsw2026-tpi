@@ -1,4 +1,3 @@
-using System.Runtime.Intrinsics.X86;
 using Dsw2026Tpi.Api.Configurations;
 using Dsw2026Tpi.Api.Middlewares;
 using Dsw2026Tpi.CrossCutting.Models;

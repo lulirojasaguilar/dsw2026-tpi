@@ -14,10 +14,12 @@ public class DoctorService : IDoctorService
     private const int MaxSlotRangeDays = 31;
 
     private readonly IPersistence _persistence;
+    private readonly IClinicClock _clock;
 
-    public DoctorService(IPersistence persistence)
+    public DoctorService(IPersistence persistence, IClinicClock clock)
     {
         _persistence = persistence;
+        _clock = clock;
     }
 
     public async Task<Pagination<DoctorModel.Response>> GetAll(
@@ -113,7 +115,7 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException("Doctor");
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = _clock.Today;
 
         var hasBookedAppointments = await _persistence.Any<Appointment>(
             appointment => appointment.DoctorId == id
@@ -140,7 +142,7 @@ public class DoctorService : IDoctorService
     {
         await EnsureDoctorExists(doctorId);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = _clock.Today;
 
         var rules = await _persistence.GetFiltered<AvailabilityRule>(
             rule => rule.DoctorId == doctorId
@@ -194,7 +196,7 @@ public class DoctorService : IDoctorService
                 && slot.SlotDate >= from
                 && slot.SlotDate <= to);
 
-        var now = DateTime.UtcNow;
+        var now = _clock.Now;
 
         return (slots ?? [])
             .Where(slot => !slot.HasStarted(now))
